@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Financeiro — Paulo Alioti</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="avatar">PA</div>
+      <div><div class="user-name">Paulo Alioti</div><div class="user-sub">Financeiro pessoal</div></div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-section">Principal</div>
+      <div class="nav-item active" onclick="showPage('dashboard')"><i class="ti ti-layout-dashboard"></i> Dashboard</div>
+      <div class="nav-item" onclick="showPage('lancamentos')"><i class="ti ti-arrows-exchange"></i> Lançamentos</div>
+      <div class="nav-item" onclick="showPage('importar')"><i class="ti ti-upload"></i> Importar</div>
+      <div class="nav-section">Análise</div>
+      <div class="nav-item" onclick="showPage('dre')"><i class="ti ti-report-money"></i> DRE</div>
+      <div class="nav-item" onclick="showPage('planocontas')"><i class="ti ti-list-tree"></i> Plano de Contas</div>
+      <div class="nav-item" onclick="showPage('patrimonio')"><i class="ti ti-trending-up"></i> Patrimônio</div>
+      <div class="nav-item" onclick="showPage('recorrentes')"><i class="ti ti-repeat"></i> Recorrentes</div>
+      <div class="nav-section">Sistema</div>
+      <div class="nav-item" onclick="showPage('configuracoes')"><i class="ti ti-settings"></i> Configurações</div>
+    </nav>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <div class="topbar-title" id="page-title">Dashboard</div>
+        <div class="topbar-sub" id="page-sub">Maio 2026</div>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn" onclick="showPage('importar')"><i class="ti ti-upload"></i> Importar</button>
+        <button class="btn btn-dark" onclick="gerarResumoCoach()"><i class="ti ti-message-2"></i> Resumo p/ coach</button>
+        <button class="btn btn-accent" onclick="abrirModalLancamento()"><i class="ti ti-plus"></i> Novo lançamento</button>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- DASHBOARD -->
+      <div id="page-dashboard" class="page active">
+        <div class="alert-banner" id="banner-validacao" style="display:none">
+          <div>
+            <div class="banner-title" id="banner-count">0 lançamentos aguardando validação</div>
+            <div class="banner-sub">A IA pré-classificou — revise e confirme em 1 minuto</div>
+          </div>
+          <button class="btn btn-ghost" onclick="showPage('lancamentos'); filtrarPendentes()">Revisar <i class="ti ti-arrow-right"></i></button>
+        </div>
+        <div class="metrics">
+          <div class="metric-card"><div class="metric-label"><i class="ti ti-arrow-down-circle"></i> Receitas</div><div class="metric-value" id="m-receitas">R$ 0</div><div class="metric-delta" id="d-receitas"></div></div>
+          <div class="metric-card"><div class="metric-label"><i class="ti ti-arrow-up-circle"></i> Despesas</div><div class="metric-value" id="m-despesas">R$ 0</div><div class="metric-delta" id="d-despesas"></div></div>
+          <div class="metric-card"><div class="metric-label"><i class="ti ti-wallet"></i> Sobra do mês</div><div class="metric-value" id="m-sobra">R$ 0</div><div class="metric-delta" id="d-sobra"></div></div>
+          <div class="metric-card"><div class="metric-label"><i class="ti ti-building-bank"></i> Patrimônio</div><div class="metric-value" id="m-patrimonio">R$ 0</div><div class="metric-delta" id="d-patrimonio"></div></div>
+        </div>
+        <div class="row-2">
+          <div class="card">
+            <div class="card-header"><div><div class="card-title">Gastos por categoria</div><div class="card-sub">vs orçamento</div></div></div>
+            <div id="lista-categorias" class="category-list"></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div><div class="card-title">Últimos lançamentos</div><div class="card-sub">Mais recentes</div></div><button class="btn" style="font-size:12px;padding:5px 10px" onclick="showPage('lancamentos')">Ver todos</button></div>
+            <div id="lista-ultimos" class="tx-list"></div>
+          </div>
+        </div>
+        <div class="card"><div class="card-header"><div><div class="card-title">Evolução patrimonial</div><div class="card-sub">Últimos 6 meses</div></div></div><div class="chart-wrap"><canvas id="chartPatrimonio"></canvas></div></div>
+      </div>
+
+      <!-- LANÇAMENTOS -->
+      <div id="page-lancamentos" class="page">
+        <div class="card">
+          <div class="card-header">
+            <div class="filters">
+              <select id="filtro-status" onchange="renderLancamentos()"><option value="">Todos</option><option value="pendente">Pendentes</option><option value="validado">Validados</option><option value="interno">Internos</option></select>
+              <select id="filtro-tipo" onchange="renderLancamentos()"><option value="">Todos os tipos</option><option value="receita">Receitas</option><option value="despesa">Despesas</option></select>
+              <select id="filtro-categoria" onchange="renderLancamentos()"><option value="">Todas as categorias</option></select>
+              <input type="text" id="filtro-tag" placeholder="Filtrar por tag..." style="padding:6px 10px;border-radius:8px;border:0.5px solid var(--border-light);font-size:13px;font-family:inherit" oninput="renderLancamentos()">
+            </div>
+          </div>
+          <table class="tx-table">
+            <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Tipo</th><th>Valor</th><th>Status</th><th></th></tr></thead>
+            <tbody id="tbody-lancamentos"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- IMPORTAR -->
+      <div id="page-importar" class="page">
+        <div class="card">
+          <div class="card-title" style="margin-bottom:16px">Importar extrato</div>
+          <div class="import-tabs">
+            <button class="tab active" onclick="switchTab('csv',this)">CSV</button>
+            <button class="tab" onclick="switchTab('ofx',this)">OFX</button>
+            <button class="tab" onclick="switchTab('manual',this)">Manual</button>
+          </div>
+          <div id="tab-csv" class="tab-content active">
+            <div class="import-area" ondragover="event.preventDefault()" ondrop="handleDrop(event,'csv')">
+              <i class="ti ti-file-spreadsheet" style="font-size:32px;color:#4f9cf9"></i>
+              <div>Arraste seu CSV aqui (Inter ou XP)</div>
+              <div style="font-size:12px;color:#94a3b8">ou</div>
+              <label class="btn btn-accent" style="cursor:pointer">Selecionar arquivo<input type="file" accept=".csv" style="display:none" onchange="handleFile(this,'csv')"></label>
+              <div style="font-size:12px;color:#94a3b8">Detecta automaticamente Inter ou XP</div>
+            </div>
+          </div>
+          <div id="tab-ofx" class="tab-content">
+            <div class="import-area">
+              <i class="ti ti-file-code" style="font-size:32px;color:#4f9cf9"></i>
+              <div>Arraste seu arquivo OFX aqui</div>
+              <div style="font-size:12px;color:#94a3b8">ou</div>
+              <label class="btn btn-accent" style="cursor:pointer">Selecionar arquivo<input type="file" accept=".ofx" style="display:none" onchange="handleFile(this,'ofx')"></label>
+            </div>
+          </div>
+          <div id="tab-manual" class="tab-content">
+            <form class="form-manual" onsubmit="salvarManual(event)">
+              <div class="form-row">
+                <div class="form-group"><label>Data</label><input type="date" id="manual-data" required></div>
+                <div class="form-group"><label>Valor (R$)</label><input type="number" id="manual-valor" step="0.01" placeholder="0,00" required></div>
+              </div>
+              <div class="form-row">
+                <div class="form-group" style="flex:2"><label>Descrição</label><input type="text" id="manual-descricao" placeholder="Ex: iFood, Uber..." required></div>
+                <div class="form-group"><label>Tipo</label><select id="manual-tipo"><option value="despesa">Despesa</option><option value="receita">Receita</option><option value="interno">Movimentação interna</option></select></div>
+              </div>
+              <div class="form-row">
+                <div class="form-group"><label>Categoria</label><select id="manual-categoria" onchange="atualizarSubcatManual()"></select></div>
+                <div class="form-group"><label>Subcategoria</label><select id="manual-subcategoria"><option value="">Sem subcategoria</option></select></div>
+              </div>
+              <div class="form-row">
+                <div class="form-group"><label>Tags (separadas por vírgula)</label><input type="text" id="manual-tags" placeholder="casamento, viagem..."></div>
+              </div>
+              <button type="submit" class="btn btn-accent">Salvar lançamento</button>
+            </form>
+          </div>
+        </div>
+        <div id="preview-importacao" class="card" style="display:none;margin-top:16px">
+          <div class="card-header">
+            <div class="card-title">Preview — valide antes de salvar</div>
+            <button class="btn btn-dark" onclick="salvarImportacao()">Salvar todos</button>
+          </div>
+          <table class="tx-table">
+            <thead><tr><th>Data</th><th>Descrição</th><th>Categoria / Subcategoria</th><th>Tipo</th><th>Valor</th><th></th></tr></thead>
+            <tbody id="tbody-preview"></tbody>
+          </table>
+        </div>
+      </div>
+
+            <!-- DRE -->
+      <div id="page-dre" class="page">
+        <div class="dre-header"><select id="dre-mes" onchange="renderDRE()"></select></div>
+        <div class="card"><table class="dre-table" id="dre-table"></table></div>
+      </div>
+
+      <!-- PLANO!-- PLANO DE CONTAS -->
+      <div id="page-planocontas" class="page">
+        <div class="card">
+          <div class="card-header">
+            <div><div class="card-title">Plano de contas</div><div class="card-sub">Categorias, subcategorias e orçamentos mensais</div></div>
+            <button class="btn btn-accent" onclick="abrirModalCategoria()"><i class="ti ti-plus"></i> Nova categoria</button>
+          </div>
+          <div id="lista-plano-contas"></div>
+        </div>
+      </div>
+
+      <!-- PATRIMÔNIO -->
+      <div id="page-patrimonio" class="page">
+        <div class="metrics" style="grid-template-columns:repeat(3,1fr)">
+          <div class="metric-card"><div class="metric-label">Patrimônio atual</div><div class="metric-value" id="pat-atual">R$ 0</div></div>
+          <div class="metric-card"><div class="metric-label">Evolução este mês</div><div class="metric-value" id="pat-mes">R$ 0</div></div>
+          <div class="metric-card"><div class="metric-label">Meta (30 anos)</div><div class="metric-value">R$ 1.000.000</div></div>
+        </div>
+        <div class="card"><div class="card-title" style="margin-bottom:16px">Evolução patrimonial</div><div class="chart-wrap" style="height:280px"><canvas id="chartPatrimonioFull"></canvas></div></div>
+        <div class="card" style="margin-top:16px">
+          <div class="card-header"><div class="card-title">Registrar patrimônio</div></div>
+          <form class="form-manual" onsubmit="salvarPatrimonio(event)">
+            <div class="form-row">
+              <div class="form-group"><label>Mês de referência</label><input type="month" id="pat-data"></div>
+              <div class="form-group"><label>Valor total (R$)</label><input type="number" id="pat-valor" step="0.01" placeholder="0,00"></div>
+              <div class="form-group" style="justify-content:flex-end;display:flex;align-items:flex-end"><button type="submit" class="btn btn-accent">Salvar</button></div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- RECORRENTES -->
+      <div id="page-recorrentes" class="page">
+        <div class="row-2">
+          <div class="card">
+            <div class="card-header"><div class="card-title">Lançamentos recorrentes</div></div>
+            <div id="lista-recorrentes"></div>
+          </div>
+          <div class="card">
+            <div class="card-title" style="margin-bottom:16px">Novo recorrente</div>
+            <form class="form-manual" onsubmit="salvarRecorrente(event)">
+              <div class="form-group"><label>Descrição</label><input type="text" id="rec-descricao" placeholder="Ex: Academia, Faculdade..." required></div>
+              <div class="form-row">
+                <div class="form-group"><label>Valor (R$)</label><input type="number" id="rec-valor" step="0.01" required></div>
+                <div class="form-group"><label>Dia do mês</label><input type="number" id="rec-dia" min="1" max="28" value="1"></div>
+              </div>
+              <div class="form-row">
+                <div class="form-group"><label>Tipo</label><select id="rec-tipo"><option value="despesa">Despesa</option><option value="receita">Receita</option></select></div>
+                <div class="form-group"><label>Categoria</label><select id="rec-categoria"></select></div>
+              </div>
+              <button type="submit" class="btn btn-accent">Salvar recorrente</button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- CONFIGURAÇÕES -->
+      <div id="page-configuracoes" class="page">
+        <div class="card">
+          <div class="card-title" style="margin-bottom:16px">Dados gerais</div>
+          <div class="form-manual">
+            <div class="form-row">
+              <div class="form-group"><label>Nome</label><input type="text" id="cfg-nome" value="Paulo Alioti"></div>
+              <div class="form-group"><label>Meta de patrimônio (R$)</label><input type="number" id="cfg-meta" value="1000000"></div>
+            </div>
+            <button class="btn btn-accent" onclick="salvarConfig()">Salvar</button>
+          </div>
+        </div>
+        <div class="card" style="margin-top:16px">
+          <div class="card-title" style="margin-bottom:4px">Dados</div>
+          <div class="card-sub" style="margin-bottom:16px">Exportar ou limpar dados do sistema</div>
+          <div style="display:flex;gap:8px">
+            <button class="btn" onclick="exportarDados()"><i class="ti ti-download"></i> Exportar JSON</button>
+            <button class="btn" style="color:var(--red);border-color:var(--red)" onclick="limparDados()"><i class="ti ti-trash"></i> Limpar tudo</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- MODAL RESUMO COACH -->
+<div id="modal-coach" class="modal-overlay" style="display:none" onclick="fecharModal('modal-coach')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header"><div class="modal-title">Resumo para o coach</div><button class="btn-icon" onclick="fecharModal('modal-coach')"><i class="ti ti-x"></i></button></div>
+    <div class="modal-body"><textarea id="resumo-texto" readonly style="width:100%;height:320px;font-family:monospace;font-size:12px;border:0.5px solid #e2e8f0;border-radius:8px;padding:12px;resize:none;background:#f8fafc;color:#334155"></textarea></div>
+    <div class="modal-footer"><button class="btn btn-accent" onclick="copiarResumo()"><i class="ti ti-copy"></i> Copiar</button><button class="btn" onclick="fecharModal('modal-coach')">Fechar</button></div>
+  </div>
+</div>
+
+<!-- MODAL VALIDAR -->
+<div id="modal-validar" class="modal-overlay" style="display:none" onclick="fecharModal('modal-validar')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header"><div class="modal-title">Validar lançamento</div><button class="btn-icon" onclick="fecharModal('modal-validar')"><i class="ti ti-x"></i></button></div>
+    <div class="modal-body">
+      <input type="hidden" id="validar-id">
+      <div class="form-group" style="margin-bottom:12px"><label>Descrição</label><input type="text" id="validar-descricao"></div>
+      <div class="form-row">
+        <div class="form-group"><label>Categoria</label><select id="validar-categoria" onchange="atualizarSubcatValidar(this.value,'')"></select></div>
+        <div class="form-group"><label>Subcategoria</label><select id="validar-subcategoria"><option value="">Sem subcategoria</option></select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Tipo</label><select id="validar-tipo"><option value="despesa">Despesa</option><option value="receita">Receita</option><option value="interno">Movimentação interna</option></select></div>
+        <div class="form-group"><label>Tags (vírgula)</label><input type="text" id="validar-tags" placeholder="casamento, viagem..."></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-accent" onclick="confirmarValidacao()">Confirmar</button>
+      <button class="btn" style="color:var(--text2)" onclick="ignorarLancamento()"><i class="ti ti-eye-off"></i> Ignorar</button>
+      <button class="btn" onclick="fecharModal('modal-validar')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast" style="display:none"></div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
