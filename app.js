@@ -5,29 +5,28 @@ let DB = {
   lancamentos: [],
   patrimonio: [],
   categorias: [
-    { id: 'alimentacao',      nome: 'Alimentação',         cor: '#4f9cf9', subcats: ['Amigos','Família','Individual','Outros'] },
-    { id: 'academia',         nome: 'Academia',             cor: '#10b981', subcats: ['Mensalidade','Creatina','Pré-treino','Protocolo','Whey','Outros'] },
-    { id: 'assinaturas',      nome: 'Assinaturas Digitais', cor: '#6366f1', subcats: ['Google','Streaming','Apps','Outros'] },
-    { id: 'beleza',           nome: 'Beleza',               cor: '#f43f5e', subcats: ['Barbearia','Cosméticos','Minoxidil','Perfume','Outros'] },
-    { id: 'casa',             nome: 'Casa',                 cor: '#84cc16', subcats: ['Aluguel','Internet','Semae','Condomínio','Outros'] },
-    { id: 'comunicacao',      nome: 'Comunicação',          cor: '#0ea5e9', subcats: ['Vivo','Outros'] },
-    { id: 'esporte',          nome: 'Esporte',              cor: '#f59e0b', subcats: ['Muay thai','Ciclismo','Corrida','Diversos'] },
-    { id: 'formacao',         nome: 'Formação',             cor: '#8b5cf6', subcats: ['Curso','Livro','Mentoria','Unicesumar','Outros'] },
-    { id: 'igreja',           nome: 'Igreja',               cor: '#ec4899', subcats: ['Dízimo','Eventos','Oferta','Outros'] },
-    { id: 'lazer',            nome: 'Lazer',                cor: '#14b8a6', subcats: ['Cinema','Conferências','Entretenimento','Futebol','Parque','Rolê','Viagem','Violão','Outros'] },
-    { id: 'namoro',           nome: 'Namoro',               cor: '#e879f9', subcats: ['Saídas','Presentes','Viagens','Outros'] },
-    { id: 'pontual',          nome: 'Pontual',              cor: '#fb923c', subcats: ['Eletrônico','Móvel','Vestuário','Utilitários','Diversos'] },
-    { id: 'presente',         nome: 'Presente',             cor: '#f87171', subcats: ['Aniversário','Celebrações','Eventos','Outros'] },
-    { id: 'saude',            nome: 'Saúde',                cor: '#2dd4bf', subcats: ['Convênio','Nutricionista','Psicólogo','Quiropraxia','Remédio','Outros'] },
-    { id: 'roupas',           nome: 'Roupas',               cor: '#a78bfa', subcats: ['Acessórios','Camiseta','Calça','Sapatos','Outros'] },
-    { id: 'transp_carro',     nome: 'Transporte - Carro',   cor: '#2258c4', subcats: ['Combustível','Manutenção','Impostos','Pneus'] },
-    { id: 'transp_moto',      nome: 'Transporte - Moto',    cor: '#1a3a7c', subcats: ['Combustível','Manutenção','Impostos'] },
-    { id: 'transp_demais',    nome: 'Transporte - Demais',  cor: '#475569', subcats: ['Estacionamento','Multa','Uber','Outros'] },
-    { id: 'investimento',     nome: 'Investimento',         cor: '#0d9488', subcats: [] },
-    { id: 'outros',           nome: 'Outros',               cor: '#94a3b8', subcats: [] },
+    { id: 'alimentacao',      nome: 'Alimentação',         cor: '#4f9cf9', codigo: '1.1', subcats: ['Amigos','Família','Individual','Outros'] },
+    { id: 'academia',         nome: 'Academia',             cor: '#10b981', codigo: '1.2', subcats: ['Mensalidade','Creatina','Pré-treino','Protocolo','Whey','Outros'] },
+    { id: 'assinaturas',      nome: 'Assinaturas Digitais', cor: '#6366f1', codigo: '1.3', subcats: ['Google','Streaming','Apps','Outros'] },
+    { id: 'beleza',           nome: 'Beleza',               cor: '#f43f5e', codigo: '1.4', subcats: ['Barbearia','Cosméticos','Minoxidil','Perfume','Outros'] },
+    { id: 'casa',             nome: 'Casa',                 cor: '#84cc16', codigo: '1.5', subcats: ['Aluguel','Internet','Semae','Condomínio','Outros'] },
+    { id: 'comunicacao',      nome: 'Comunicação',          cor: '#0ea5e9', codigo: '1.6', subcats: ['Vivo','Outros'] },
+    { id: 'esporte',          nome: 'Esporte',              cor: '#f59e0b', codigo: '1.7', subcats: ['Muay thai','Ciclismo','Corrida','Diversos'] },
+    { id: 'formacao',         nome: 'Formação',             cor: '#8b5cf6', codigo: '1.8', subcats: ['Curso','Livro','Mentoria','Unicesumar','Outros'] },
+    { id: 'igreja',           nome: 'Igreja',               cor: '#ec4899', codigo: '1.9', subcats: ['Dízimo','Eventos','Oferta','Outros'] },
+    { id: 'lazer',            nome: 'Lazer',                cor: '#14b8a6', codigo: '1.10', subcats: ['Cinema','Conferências','Entretenimento','Futebol','Parque','Rolê','Viagem','Violão','Outros'] },
+    { id: 'namoro',           nome: 'Namoro',               cor: '#e879f9', codigo: '1.11', subcats: ['Saídas','Presentes','Viagens','Outros'] },
+    { id: 'pontual',          nome: 'Pontual',              cor: '#fb923c', codigo: '1.12', subcats: ['Eletrônico','Móvel','Vestuário','Utilitários','Diversos'] },
+    { id: 'presente',         nome: 'Presente',             cor: '#f87171', codigo: '1.13', subcats: ['Aniversário','Celebrações','Eventos','Outros'] },
+    { id: 'saude',            nome: 'Saúde',                cor: '#2dd4bf', codigo: '1.14', subcats: ['Convênio','Nutricionista','Psicólogo','Quiropraxia','Remédio','Outros'] },
+    { id: 'roupas',           nome: 'Roupas',               cor: '#a78bfa', codigo: '1.15', subcats: ['Acessórios','Camiseta','Calça','Sapatos','Outros'] },
+    { id: 'transp_carro',     nome: 'Transporte - Carro',   cor: '#2258c4', codigo: '1.16', subcats: ['Combustível','Manutenção','Impostos','Pneus'] },
+    { id: 'transp_moto',      nome: 'Transporte - Moto',    cor: '#1a3a7c', codigo: '1.17', subcats: ['Combustível','Manutenção','Impostos'] },
+    { id: 'transp_demais',    nome: 'Transporte - Demais',  cor: '#475569', codigo: '1.18', subcats: ['Estacionamento','Multa','Uber','Outros'] },
+    { id: 'investimento',     nome: 'Investimento',         cor: '#0d9488', codigo: '2.1', subcats: [] },
+    { id: 'outros',           nome: 'Outros',               cor: '#94a3b8', codigo: '9.9', subcats: [] },
   ],
   orcamentos: {},
-  recorrentes: [],
   regras: [],
   config: { nome: 'Paulo Alioti', meta: 1000000 }
 };
@@ -46,7 +45,6 @@ document.addEventListener('DOMContentLoaded', () => {
   try { renderDashboard(); } catch(e) { console.error('renderDashboard:', e); }
   try { renderLancamentos(); } catch(e) { console.error('renderLancamentos:', e); }
   try { atualizarBannerValidacao(); } catch(e) { console.error('banner:', e); }
-  try { verificarRecorrentes(); } catch(e) { console.error('recorrentes:', e); }
 });
 
 // ========================
@@ -65,7 +63,6 @@ function carregarDB() {
       DB.lancamentos = parsed.lancamentos || [];
       DB.patrimonio = parsed.patrimonio || [];
       DB.orcamentos = parsed.orcamentos || {};
-      DB.recorrentes = parsed.recorrentes || [];
       DB.regras = parsed.regras || [];
       DB.config = { ...DB.config, ...(parsed.config || {}) };
       // Merge categorias preservando subcats
@@ -89,14 +86,14 @@ function showPage(id) {
     const pg = document.getElementById('page-' + id);
     if (pg) pg.classList.add('active');
 
-    const navMap = { dashboard:0, lancamentos:1, importar:2, dre:3, planocontas:4, patrimonio:5, recorrentes:6, configuracoes:7 };
+    const navMap = { dashboard:0, lancamentos:1, importar:2, dre:3, planocontas:4, patrimonio:5, configuracoes:6 };
     const items = document.querySelectorAll('.nav-item');
     if (items[navMap[id]]) items[navMap[id]].classList.add('active');
 
     const titles = {
       dashboard:'Dashboard', lancamentos:'Lançamentos', importar:'Importar',
       dre:'DRE', planocontas:'Plano de Contas', patrimonio:'Patrimônio',
-      recorrentes:'Recorrentes', configuracoes:'Configurações'
+      configuracoes:'Configurações'
     };
     const titleEl = document.getElementById('page-title');
     if (titleEl) titleEl.textContent = titles[id] || id;
@@ -106,7 +103,6 @@ function showPage(id) {
     if (id === 'dre') { try { preencherDREmeses(); renderDRE(); } catch(e) { console.error('DRE:', e); } }
     if (id === 'planocontas') { renderPlanoContas(); renderRegras(); }
     if (id === 'patrimonio') renderPatrimonio();
-    if (id === 'recorrentes') renderRecorrentes();
   } catch(e) {
     console.error('showPage error:', e);
   }
@@ -304,10 +300,52 @@ function renderLancamentos() {
       '<td class="tx-amount ' + amtClass + '">' + amtPrefix + ' ' + fmt(l.valor) + '</td>' +
       '<td>' + badge + '</td>' +
       '<td>' +
-        (l.status === 'pendente' ? '<button class="btn" style="font-size:11px;padding:4px 8px" onclick="abrirValidar(\'' + l.id + '\')">Validar</button> ' : '') +
+        (l.status === 'pendente' ? '<button class="btn" style="font-size:11px;padding:4px 8px" onclick="abrirValidar(\'' + l.id + '\')">Validar</button> ' : '') +'<button class="btn" style="font-size:11px;padding:4px 8px" onclick="abrirEditar(\'' + l.id + '\')"><i class="ti ti-pencil"></i></button> ' +
         '<button class="btn" style="font-size:11px;padding:4px 8px;color:var(--red);border-color:var(--red)" onclick="excluirLancamento(\'' + l.id + '\')"><i class="ti ti-trash"></i></button>' +
       '</td>' +
     '</tr>';
+  });
+}
+
+
+// ========================
+// BUSCA GLOBAL
+// ========================
+function buscarGlobal(query) {
+  if (!query || query.length < 2) { renderLancamentos(); return; }
+  const q = query.toLowerCase();
+  const lista = DB.lancamentos.filter(l =>
+    l.descricao.toLowerCase().includes(q) ||
+    getNomeCat(l.categoria).toLowerCase().includes(q) ||
+    (l.subcategoria||'').toLowerCase().includes(q) ||
+    (l.tags||[]).some(t => t.toLowerCase().includes(q))
+  ).sort((a,b) => b.data.localeCompare(a.data));
+
+  const tbody = document.getElementById('tbody-lancamentos');
+  tbody.innerHTML = '';
+  if (!lista.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:24px">Nenhum resultado para "' + query + '"</td></tr>';
+    return;
+  }
+  lista.forEach(l => {
+    const isInterno = l.tipo === 'interno';
+    const badge = l.status === 'pendente' ? '<span class="tx-badge badge-pendente">revisar</span>' : isInterno ? '<span class="tx-badge badge-interno">interno</span>' : '<span class="tx-badge badge-validado">validado</span>';
+    const amtClass = isInterno ? 'neu' : l.tipo === 'receita' ? 'pos' : 'neg';
+    const amtPrefix = isInterno ? '' : l.tipo === 'receita' ? '+' : '-';
+    const subcatStr = l.subcategoria ? ' › ' + l.subcategoria : '';
+    const tagsStr = (l.tags||[]).map(t=>'<span class="tag-pill">'+t+'</span>').join('');
+    tbody.innerHTML += '<tr>' +
+      '<td>' + formatarData(l.data) + '</td>' +
+      '<td>' + l.descricao + (tagsStr ? '<br><span style="margin-top:2px;display:flex;gap:4px">' + tagsStr + '</span>' : '') + '</td>' +
+      '<td>' + (isInterno ? '<span class="tag-interno">Interno</span>' : getNomeCat(l.categoria) + subcatStr) + '</td>' +
+      '<td><span style="text-transform:capitalize">' + l.tipo + '</span></td>' +
+      '<td class="tx-amount ' + amtClass + '">' + amtPrefix + ' ' + fmt(l.valor) + '</td>' +
+      '<td>' + badge + '</td>' +
+      '<td style="white-space:nowrap">' +
+        (l.status === 'pendente' ? '<button class="btn" style="font-size:11px;padding:4px 8px" onclick="abrirValidar(\'' + l.id + '\')">Validar</button> ' : '') +
+        '<button class="btn" style="font-size:11px;padding:4px 8px" onclick="abrirEditar(\'' + l.id + '\')"><i class="ti ti-pencil"></i></button> ' +
+        '<button class="btn" style="font-size:11px;padding:4px 8px;color:var(--red);border-color:var(--red)" onclick="excluirLancamento(\'' + l.id + '\')"><i class="ti ti-trash"></i></button>' +
+      '</td></tr>';
   });
 }
 
@@ -321,6 +359,46 @@ function excluirLancamento(id) {
   DB.lancamentos = DB.lancamentos.filter(l => l.id !== id);
   salvarDB(); renderLancamentos(); renderDashboard(); atualizarBannerValidacao();
   toast('Lançamento excluído');
+}
+
+function abrirEditar(id) {
+  const l = DB.lancamentos.find(l => l.id === id);
+  if (!l) return;
+  document.getElementById('editar-id').value = id;
+  document.getElementById('editar-data').value = l.data;
+  document.getElementById('editar-descricao').value = l.descricao;
+  document.getElementById('editar-valor').value = l.valor;
+  document.getElementById('editar-tipo').value = l.tipo;
+  document.getElementById('editar-tags').value = (l.tags||[]).join(', ');
+  preencherSelectCategoria('editar-categoria', l.categoria);
+  atualizarSubcatEditar(l.categoria, l.subcategoria);
+  document.getElementById('modal-editar').style.display = 'flex';
+}
+
+function atualizarSubcatEditar(catId, valorAtual) {
+  const subcats = getSubcats(catId);
+  const sel = document.getElementById('editar-subcategoria');
+  sel.innerHTML = '<option value="">Sem subcategoria</option>' +
+    subcats.map(s => '<option value="'+s+'"'+(s===valorAtual?' selected':'')+'>'+s+'</option>').join('');
+}
+
+function salvarEdicao() {
+  const id = document.getElementById('editar-id').value;
+  const l = DB.lancamentos.find(l => l.id === id);
+  if (!l) return;
+  const catAntiga = l.categoria;
+  l.data = document.getElementById('editar-data').value;
+  l.descricao = document.getElementById('editar-descricao').value;
+  l.valor = parseFloat(document.getElementById('editar-valor').value);
+  l.tipo = document.getElementById('editar-tipo').value;
+  l.categoria = document.getElementById('editar-categoria').value;
+  l.subcategoria = document.getElementById('editar-subcategoria').value;
+  const tagsRaw = document.getElementById('editar-tags').value;
+  l.tags = tagsRaw ? tagsRaw.split(',').map(t=>t.trim()).filter(Boolean) : [];
+  l.status = 'validado';
+  if (l.categoria !== catAntiga) verificarESalvarRegra(l.descricao, l.categoria, catAntiga);
+  salvarDB(); fecharModal('modal-editar'); renderLancamentos(); renderDashboard();
+  toast('Lançamento atualizado!');
 }
 
 function atualizarBannerValidacao() {
@@ -603,7 +681,8 @@ function mostrarPreview(lancamentos) {
       '<td><input type="text" value="'+l.descricao.replace(/"/g,'&quot;')+'" style="width:100%;min-width:140px;padding:4px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:12px" onchange="previewLancs['+i+'].descricao=this.value"></td>' +
       '<td style="min-width:160px">' +
         '<select style="width:100%;padding:4px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:12px;margin-bottom:3px" onchange="previewLancs['+i+'].categoria=this.value;atualizarSubcatPreview('+i+',this.value)">'+catOpts+'</select>' +
-        '<select id="subcat-preview-'+i+'" style="width:100%;padding:4px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:11px;color:var(--text2)" onchange="previewLancs['+i+'].subcategoria=this.value">'+subcatOpts+'</select>' +
+        '<select id="subcat-preview-'+i+'" style="width:100%;padding:4px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:11px;color:var(--text2);margin-bottom:3px" onchange="previewLancs['+i+'].subcategoria=this.value">'+subcatOpts+'</select>' +
+        '<input type="text" placeholder="tags..." value="'+(l.tags||[]).join(', ')+'" style="width:100%;padding:3px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:11px;color:var(--text2)" onchange="previewLancs['+i+'].tags=this.value.split(\',\').map(function(t){return t.trim();}).filter(Boolean)">' +
       '</td>' +
       '<td><select style="padding:4px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:12px" onchange="previewLancs['+i+'].tipo=this.value">' +
         '<option value="despesa"'+(l.tipo==='despesa'?' selected':'')+'>Despesa</option>' +
@@ -714,33 +793,135 @@ function renderPlanoContas() {
   const lista = document.getElementById('lista-plano-contas');
   if (!lista) return;
   lista.innerHTML = '';
-  DB.categorias.forEach(cat => {
+  DB.categorias.forEach((cat, idx) => {
     const orc = DB.orcamentos[cat.id] || 0;
-    lista.innerHTML += '<div class="plano-cat-item" id="plano-'+cat.id+'">' +
-      '<div class="plano-cat-header">' +
-        '<div style="display:flex;align-items:center;gap:10px">' +
-          '<div style="width:12px;height:12px;border-radius:50%;background:'+cat.cor+';flex-shrink:0"></div>' +
-          '<span style="font-size:14px;font-weight:500">'+cat.nome+'</span>' +
-        '</div>' +
-        '<div style="display:flex;align-items:center;gap:8px">' +
-          '<div class="orc-input-wrap">' +
-            '<span style="font-size:12px;color:var(--text2)">Orçamento:</span>' +
-            '<input type="number" class="orc-input" value="'+(orc||'')+'" placeholder="—" onchange="salvarOrcamento(\''+cat.id+'\',this.value)" step="0.01">' +
+    const podeSubirCat = idx > 0;
+    const podeDescer = idx < DB.categorias.length - 1;
+    lista.innerHTML +=
+      '<div class="plano-cat-item" id="plano-'+cat.id+'">' +
+        '<div class="plano-cat-header">' +
+          '<div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">' +
+            // Seletor de cor inline
+            '<div style="position:relative;flex-shrink:0">' +
+              '<div style="width:14px;height:14px;border-radius:50%;background:'+cat.cor+';cursor:pointer;border:2px solid rgba(0,0,0,0.08)" onclick="abrirColorPicker(\''+cat.id+'\')" title="Alterar cor"></div>' +
+              '<input type="color" id="color-picker-'+cat.id+'" value="'+cat.cor+'" style="position:absolute;opacity:0;width:0;height:0" onchange="salvarCorCategoria(\''+cat.id+'\',this.value)">' +
+            '</div>' +
+            // Código editável
+            '<input type="text" value="'+(cat.codigo||'')+'" placeholder="Cód" ' +
+              'style="width:44px;font-size:11px;color:var(--text3);border:none;background:transparent;text-align:center;padding:2px 0;cursor:text;font-family:inherit" ' +
+              'title="Editar código" ' +
+              'onblur="salvarCodigoCategoria(\''+cat.id+'\',this.value)" ' +
+              'onkeydown="if(event.key===\'Enter\')this.blur()">' +
+            // Nome editável
+            '<input type="text" value="'+cat.nome.replace(/"/g,'&quot;')+'" ' +
+              'style="flex:1;min-width:0;font-size:14px;font-weight:500;border:none;background:transparent;color:var(--text);font-family:inherit;padding:2px 4px;cursor:text;border-radius:4px" ' +
+              'title="Editar nome" ' +
+              'onblur="salvarNomeCategoria(\''+cat.id+'\',this.value)" ' +
+              'onkeydown="if(event.key===\'Enter\')this.blur()">' +
           '</div>' +
-          '<button class="btn" style="font-size:11px;padding:3px 8px" onclick="adicionarSubcat(\''+cat.id+'\')"><i class="ti ti-plus"></i></button>' +
-          '<button class="btn" style="font-size:11px;padding:3px 8px;color:var(--red)" onclick="excluirCategoria(\''+cat.id+'\')"><i class="ti ti-trash"></i></button>' +
+          '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">' +
+            // Reordenar categoria
+            '<button class="btn" style="font-size:11px;padding:2px 6px;color:var(--text3)" title="Mover para cima" onclick="moverCategoria(\''+cat.id+'\',-1)"'+(podeSubirCat?'':' disabled style="font-size:11px;padding:2px 6px;opacity:0.3"')+'>↑</button>' +
+            '<button class="btn" style="font-size:11px;padding:2px 6px;color:var(--text3)" title="Mover para baixo" onclick="moverCategoria(\''+cat.id+'\',1)"'+(podeDescer?'':' disabled style="font-size:11px;padding:2px 6px;opacity:0.3"')+'>↓</button>' +
+            '<div class="orc-input-wrap">' +
+              '<span style="font-size:11px;color:var(--text3)">Orç:</span>' +
+              '<input type="number" class="orc-input" value="'+(orc||'')+'" placeholder="—" onchange="salvarOrcamento(\''+cat.id+'\',this.value)" step="0.01">' +
+            '</div>' +
+            '<button class="btn" style="font-size:11px;padding:3px 8px" onclick="adicionarSubcat(\''+cat.id+'\')" title="Nova subcategoria"><i class="ti ti-plus"></i></button>' +
+            '<button class="btn" style="font-size:11px;padding:3px 8px;color:var(--red)" onclick="excluirCategoria(\''+cat.id+'\')" title="Excluir categoria"><i class="ti ti-trash"></i></button>' +
+          '</div>' +
         '</div>' +
-      '</div>' +
-      '<div class="plano-subcats" id="subcats-'+cat.id+'">' +
-        (cat.subcats||[]).map(s =>
-          '<div class="subcat-item">' +
-            '<span style="font-size:13px;color:var(--text2)">› '+s+'</span>' +
-            '<button class="btn" style="font-size:10px;padding:2px 6px;color:var(--red)" onclick="excluirSubcat(\''+cat.id+'\',\''+s+'\')"><i class="ti ti-x"></i></button>' +
-          '</div>'
-        ).join('') +
-      '</div>' +
-    '</div>';
+        '<div class="plano-subcats" id="subcats-'+cat.id+'">' +
+          (cat.subcats||[]).map((s, si) => {
+            const podeSubir = si > 0;
+            const podeBaixo = si < (cat.subcats||[]).length - 1;
+            return '<div class="subcat-item">' +
+              '<div style="display:flex;align-items:center;gap:6px;flex:1">' +
+                '<span style="color:var(--text3);font-size:12px">›</span>' +
+                '<input type="text" value="'+s.replace(/"/g,'&quot;')+'" ' +
+                  'style="flex:1;font-size:13px;color:var(--text2);border:none;background:transparent;font-family:inherit;padding:2px 4px;border-radius:4px;cursor:text" ' +
+                  'title="Editar subcategoria" ' +
+                  'onblur="renomearSubcat(\''+cat.id+'\','+si+',this.value)" ' +
+                  'onkeydown="if(event.key===\'Enter\')this.blur()">' +
+              '</div>' +
+              '<div style="display:flex;gap:4px">' +
+                '<button class="btn" style="font-size:10px;padding:1px 5px;color:var(--text3)" title="Subir" onclick="moverSubcat(\''+cat.id+'\','+si+',-1)"'+(podeSubir?'':' disabled style="font-size:10px;padding:1px 5px;opacity:0.3"')+'>↑</button>' +
+                '<button class="btn" style="font-size:10px;padding:1px 5px;color:var(--text3)" title="Descer" onclick="moverSubcat(\''+cat.id+'\','+si+',1)"'+(podeBaixo?'':' disabled style="font-size:10px;padding:1px 5px;opacity:0.3"')+'>↓</button>' +
+                '<button class="btn" style="font-size:10px;padding:2px 6px;color:var(--red)" onclick="excluirSubcat(\''+cat.id+'\',\''+s.replace(/'/g,"\\'")+'\')" title="Excluir"><i class="ti ti-x"></i></button>' +
+              '</div>' +
+            '</div>';
+          }).join('') +
+        '</div>' +
+      '</div>';
   });
+}
+
+function abrirColorPicker(catId) {
+  const input = document.getElementById('color-picker-' + catId);
+  if (input) input.click();
+}
+
+function salvarCorCategoria(catId, cor) {
+  const cat = DB.categorias.find(c => c.id === catId);
+  if (!cat) return;
+  cat.cor = cor;
+  salvarDB(); renderPlanoContas(); renderDashboard();
+  toast('Cor atualizada!');
+}
+
+function salvarNomeCategoria(catId, nome) {
+  nome = nome.trim();
+  if (!nome) { renderPlanoContas(); return; }
+  const cat = DB.categorias.find(c => c.id === catId);
+  if (!cat || cat.nome === nome) return;
+  cat.nome = nome;
+  salvarDB(); preencherSelects();
+  toast('Nome salvo!');
+}
+
+function salvarCodigoCategoria(catId, codigo) {
+  const cat = DB.categorias.find(c => c.id === catId);
+  if (!cat) return;
+  cat.codigo = codigo.trim();
+  salvarDB();
+}
+
+function moverCategoria(catId, dir) {
+  const idx = DB.categorias.findIndex(c => c.id === catId);
+  if (idx < 0) return;
+  const novo = idx + dir;
+  if (novo < 0 || novo >= DB.categorias.length) return;
+  const temp = DB.categorias[idx];
+  DB.categorias[idx] = DB.categorias[novo];
+  DB.categorias[novo] = temp;
+  salvarDB(); renderPlanoContas(); preencherSelects();
+}
+
+function moverSubcat(catId, si, dir) {
+  const cat = DB.categorias.find(c => c.id === catId);
+  if (!cat || !cat.subcats) return;
+  const novo = si + dir;
+  if (novo < 0 || novo >= cat.subcats.length) return;
+  const temp = cat.subcats[si];
+  cat.subcats[si] = cat.subcats[novo];
+  cat.subcats[novo] = temp;
+  salvarDB(); renderPlanoContas();
+}
+
+function renomearSubcat(catId, si, novoNome) {
+  novoNome = novoNome.trim();
+  if (!novoNome) { renderPlanoContas(); return; }
+  const cat = DB.categorias.find(c => c.id === catId);
+  if (!cat || !cat.subcats) return;
+  const nomeAntigo = cat.subcats[si];
+  if (nomeAntigo === novoNome) return;
+  // Atualiza lançamentos existentes
+  DB.lancamentos.forEach(l => {
+    if (l.categoria === catId && l.subcategoria === nomeAntigo) l.subcategoria = novoNome;
+  });
+  cat.subcats[si] = novoNome;
+  salvarDB(); preencherSelects();
+  toast('Subcategoria renomeada!');
 }
 
 function salvarOrcamento(catId, valor) {
@@ -752,12 +933,12 @@ function salvarOrcamento(catId, valor) {
 
 function adicionarSubcat(catId) {
   const nome = prompt('Nome da subcategoria:');
-  if (!nome) return;
+  if (!nome || !nome.trim()) return;
   const cat = DB.categorias.find(c => c.id === catId);
   if (!cat) return;
   if (!cat.subcats) cat.subcats = [];
-  if (cat.subcats.includes(nome)) { toast('Subcategoria já existe'); return; }
-  cat.subcats.push(nome);
+  if (cat.subcats.includes(nome.trim())) { toast('Subcategoria já existe'); return; }
+  cat.subcats.push(nome.trim());
   salvarDB(); renderPlanoContas(); preencherSelects();
   toast('Subcategoria criada!');
 }
@@ -771,13 +952,21 @@ function excluirSubcat(catId, nome) {
 }
 
 function abrirModalCategoria() {
-  const nome = prompt('Nome da nova categoria:');
-  if (!nome) return;
-  const cores = ['#4f9cf9','#10b981','#8b5cf6','#f59e0b','#ec4899','#ef4444','#06b6d4','#84cc16'];
-  const cor = cores[DB.categorias.length % cores.length];
+  document.getElementById('edit-cat-id').value = '';
+  document.getElementById('edit-cat-nome').value = '';
+  document.getElementById('edit-cat-codigo').value = '';
+  document.getElementById('edit-cat-cor').value = '#4f9cf9';
+  document.getElementById('modal-edit-cat').style.display = 'flex';
+}
+
+function salvarNovaOuEditadaCategoria() {
+  const nome = document.getElementById('edit-cat-nome').value.trim();
+  const codigo = document.getElementById('edit-cat-codigo').value.trim();
+  const cor = document.getElementById('edit-cat-cor').value;
+  if (!nome) { toast('Informe o nome'); return; }
   const id = nome.toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'') + '_' + Date.now().toString(36);
-  DB.categorias.push({ id, nome, cor, subcats: [] });
-  salvarDB(); preencherSelects(); renderPlanoContas();
+  DB.categorias.push({ id, nome, cor, codigo, subcats: [] });
+  salvarDB(); fecharModal('modal-edit-cat'); preencherSelects(); renderPlanoContas();
   toast('Categoria criada!');
 }
 
@@ -786,64 +975,6 @@ function excluirCategoria(id) {
   DB.categorias = DB.categorias.filter(c => c.id !== id);
   salvarDB(); preencherSelects(); renderPlanoContas();
   toast('Categoria excluída');
-}
-
-// ========================
-// RECORRENTES
-// ========================
-function renderRecorrentes() {
-  const lista = document.getElementById('lista-recorrentes');
-  if (!lista) return;
-  lista.innerHTML = '';
-  if (!DB.recorrentes.length) {
-    lista.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:16px 0">Nenhum lançamento recorrente cadastrado</div>';
-    return;
-  }
-  DB.recorrentes.forEach(r => {
-    lista.innerHTML += '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:0.5px solid var(--border-light2)">' +
-      '<div style="flex:1">' +
-        '<div style="font-size:13px;font-weight:500">'+r.descricao+'</div>' +
-        '<div style="font-size:11px;color:var(--text2)">'+getNomeCat(r.categoria)+' · Todo mês</div>' +
-      '</div>' +
-      '<div style="font-size:13px;font-weight:500;color:var(--red)">'+fmt(r.valor)+'</div>' +
-      '<button class="btn" style="font-size:11px;padding:4px 8px;color:var(--red)" onclick="excluirRecorrente(\''+r.id+'\')"><i class="ti ti-trash"></i></button>' +
-    '</div>';
-  });
-}
-
-function salvarRecorrente(e) {
-  e.preventDefault();
-  const r = {
-    id: gerarId(),
-    descricao: document.getElementById('rec-descricao').value,
-    valor: parseFloat(document.getElementById('rec-valor').value),
-    tipo: document.getElementById('rec-tipo').value,
-    categoria: document.getElementById('rec-categoria').value,
-    diaVencimento: parseInt(document.getElementById('rec-dia').value) || 1
-  };
-  DB.recorrentes.push(r);
-  salvarDB(); e.target.reset(); renderRecorrentes();
-  toast('Recorrente salvo!');
-}
-
-function excluirRecorrente(id) {
-  DB.recorrentes = DB.recorrentes.filter(r => r.id !== id);
-  salvarDB(); renderRecorrentes();
-  toast('Recorrente removido');
-}
-
-function verificarRecorrentes() {
-  if (!DB.recorrentes.length) return;
-  const hoje = new Date();
-  const mesHoje = hoje.toISOString().slice(0,7);
-  DB.recorrentes.forEach(r => {
-    const jaExiste = DB.lancamentos.some(l => l.data.startsWith(mesHoje) && l.descricao === r.descricao && l.recorrenteId === r.id);
-    if (!jaExiste) {
-      const dia = String(r.diaVencimento).padStart(2,'0');
-      DB.lancamentos.push({ ...r, id:gerarId(), data:mesHoje+'-'+dia, status:'pendente', recorrenteId:r.id });
-    }
-  });
-  salvarDB(); atualizarBannerValidacao();
 }
 
 // ========================
@@ -931,7 +1062,7 @@ function copiarResumo() {
 // SELECTS
 // ========================
 function preencherSelects() {
-  ['manual-categoria','validar-categoria','filtro-categoria','rec-categoria'].forEach(id => {
+  ['manual-categoria','validar-categoria','filtro-categoria'].forEach(id => {
     const el = document.getElementById(id); if (!el) return;
     const isFilter = id === 'filtro-categoria';
     el.innerHTML = (isFilter ? '<option value="">Todas as categorias</option>' : '') +
