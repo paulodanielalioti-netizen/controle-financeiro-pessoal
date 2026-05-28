@@ -376,20 +376,6 @@ body {
 /* TAGS */
 .tag-pill { display: inline-flex; align-items: center; font-size: 10px; padding: 2px 7px; border-radius: 99px; background: rgba(79,156,249,0.1); color: #2258c4; border: 0.5px solid rgba(79,156,249,0.3); }
 
-/* PLANO DE CONTAS — edição inline */
-.plano-cat-header input[type="text"]:hover,
-.plano-cat-header input[type="text"]:focus,
-.plano-subcats input[type="text"]:hover,
-.plano-subcats input[type="text"]:focus {
-  background: var(--bg) !important;
-  outline: none;
-  border: 0.5px solid var(--accent) !important;
-}
-.plano-cat-header input[type="text"],
-.plano-subcats input[type="text"] {
-  transition: background 0.15s, border 0.15s;
-}
-
 /* DRE PLANILHA */
 .dre-planilha { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 900px; }
 .dre-th-label { text-align: left; padding: 10px 16px; background: var(--dark); color: #fff; font-size: 12px; font-weight: 500; position: sticky; left: 0; z-index: 2; min-width: 200px; }
