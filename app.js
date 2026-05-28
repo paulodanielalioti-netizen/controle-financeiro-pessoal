@@ -38,6 +38,7 @@ let DB = {
   ],
   orcamentos: {},
   regras: [],
+  tags: [],
   config: { nome: 'Paulo Alioti', meta: 1000000 }
 };
 
@@ -52,6 +53,7 @@ let mesAtual = new Date().toISOString().slice(0, 7);
 document.addEventListener('DOMContentLoaded', () => {
   try { carregarDB(); } catch(e) { console.error('carregarDB:', e); }
   try { preencherSelects(); } catch(e) { console.error('preencherSelects:', e); }
+  try { renderSeletorTags('manual-tags-seletor', []); } catch(e) { console.error('seletorTags:', e); }
   try { renderDashboard(); } catch(e) { console.error('renderDashboard:', e); }
   try { renderLancamentos(); } catch(e) { console.error('renderLancamentos:', e); }
   try { atualizarBannerValidacao(); } catch(e) { console.error('banner:', e); }
@@ -74,6 +76,7 @@ function carregarDB() {
       DB.patrimonio = parsed.patrimonio || [];
       DB.orcamentos = parsed.orcamentos || {};
       DB.regras = parsed.regras || [];
+      DB.tags = parsed.tags || [];
       DB.config = { ...DB.config, ...(parsed.config || {}) };
       // Merge categorias preservando subcats
       if (parsed.categorias && parsed.categorias.length) {
@@ -389,9 +392,9 @@ function abrirEditar(id) {
   document.getElementById('editar-descricao').value = l.descricao;
   document.getElementById('editar-valor').value = l.valor;
   document.getElementById('editar-tipo').value = l.tipo;
-  document.getElementById('editar-tags').value = (l.tags||[]).join(', ');
   preencherSelectCategoria('editar-categoria', l.categoria);
   atualizarSubcatEditar(l.categoria, l.subcategoria);
+  renderSeletorTags('editar-tags-seletor', l.tags || []);
   document.getElementById('modal-editar').style.display = 'flex';
 }
 
@@ -413,8 +416,7 @@ function salvarEdicao() {
   l.tipo = document.getElementById('editar-tipo').value;
   l.categoria = document.getElementById('editar-categoria').value;
   l.subcategoria = document.getElementById('editar-subcategoria').value;
-  const tagsRaw = document.getElementById('editar-tags').value;
-  l.tags = tagsRaw ? tagsRaw.split(',').map(t=>t.trim()).filter(Boolean) : [];
+  l.tags = getTagsSelecionadas('editar-tags-seletor');
   l.status = 'validado';
   if (l.categoria !== catAntiga) verificarESalvarRegra(l.descricao, l.categoria, catAntiga);
   salvarDB(); fecharModal('modal-editar'); renderLancamentos(); renderDashboard();
@@ -441,9 +443,9 @@ function abrirValidar(id) {
   document.getElementById('validar-id').value = id;
   document.getElementById('validar-descricao').value = l.descricao;
   document.getElementById('validar-tipo').value = l.tipo;
-  document.getElementById('validar-tags').value = (l.tags || []).join(', ');
   preencherSelectCategoria('validar-categoria', l.categoria);
   atualizarSubcatValidar(l.categoria, l.subcategoria);
+  renderSeletorTags('validar-tags-seletor', l.tags || []);
   document.getElementById('modal-validar').style.display = 'flex';
 }
 
@@ -463,8 +465,7 @@ function confirmarValidacao() {
   l.categoria = document.getElementById('validar-categoria').value;
   l.subcategoria = document.getElementById('validar-subcategoria').value;
   l.tipo = document.getElementById('validar-tipo').value;
-  const tagsRaw = document.getElementById('validar-tags').value;
-  l.tags = tagsRaw ? tagsRaw.split(',').map(t => t.trim()).filter(Boolean) : [];
+  l.tags = getTagsSelecionadas('validar-tags-seletor');
   l.status = 'validado';
   salvarDB();
   // Pergunta se quer criar regra para essa classificação
@@ -492,6 +493,7 @@ function switchTabPlano(tab, el) {
   el.classList.add('active');
   document.getElementById('plano-tab-' + tab).classList.add('active');
   if (tab === 'regras') renderRegras();
+  if (tab === 'tags') renderTags();
 }
 
 function switchTab(tab, el) {
@@ -687,6 +689,85 @@ function excluirRegra(id) {
   toast('Regra removida');
 }
 
+// ========================
+// TAGS PRÉ-CADASTRADAS
+// ========================
+function renderTags() {
+  const lista = document.getElementById('lista-tags');
+  if (!lista) return;
+  lista.innerHTML = '';
+  if (!DB.tags.length) {
+    lista.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:16px 0">Nenhuma tag cadastrada.<br>Crie tags para classificar seus lançamentos por contexto (namoro, viagem, trabalho...).</div>';
+    return;
+  }
+  DB.tags.forEach(tag => {
+    lista.innerHTML +=
+      '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--border-light2)">' +
+        '<div style="width:10px;height:10px;border-radius:50%;background:'+tag.cor+';flex-shrink:0"></div>' +
+        '<span style="flex:1;font-size:13px;font-weight:500">'+tag.nome+'</span>' +
+        '<button class="btn" style="font-size:11px;padding:3px 8px;color:var(--red)" onclick="excluirTag(\''+tag.id+'\')"><i class="ti ti-trash"></i></button>' +
+      '</div>';
+  });
+}
+
+function abrirModalNovaTag() {
+  document.getElementById('nova-tag-nome').value = '';
+  document.getElementById('nova-tag-cor').value = '#4f9cf9';
+  document.getElementById('modal-nova-tag').style.display = 'flex';
+}
+
+function salvarNovaTag() {
+  const nome = document.getElementById('nova-tag-nome').value.trim();
+  const cor = document.getElementById('nova-tag-cor').value;
+  if (!nome) { toast('Informe o nome da tag'); return; }
+  if (DB.tags.find(t => t.nome.toLowerCase() === nome.toLowerCase())) { toast('Tag já existe'); return; }
+  DB.tags.push({ id: gerarId(), nome, cor });
+  salvarDB(); fecharModal('modal-nova-tag'); renderTags();
+  toast('Tag criada!');
+}
+
+function excluirTag(id) {
+  if (!confirm('Excluir tag? Ela será removida dos lançamentos existentes.')) return;
+  const tag = DB.tags.find(t => t.id === id);
+  if (tag) {
+    DB.lancamentos.forEach(l => {
+      l.tags = (l.tags || []).filter(t => t !== tag.nome);
+    });
+  }
+  DB.tags = DB.tags.filter(t => t.id !== id);
+  salvarDB(); renderTags();
+  toast('Tag removida');
+}
+
+// Renderiza seletor de tags (checkboxes) num container
+function renderSeletorTags(containerId, selecionadas) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  if (!DB.tags.length) {
+    el.innerHTML = '<span style="font-size:12px;color:var(--text3)">Nenhuma tag cadastrada. Crie em Plano de Contas → Tags.</span>';
+    return;
+  }
+  el.innerHTML = DB.tags.map(tag =>
+    '<label style="display:inline-flex;align-items:center;gap:5px;margin:3px 4px 3px 0;cursor:pointer;padding:3px 8px;border-radius:99px;border:0.5px solid '+(selecionadas.includes(tag.nome)?tag.cor:'var(--border-light)')+';background:'+(selecionadas.includes(tag.nome)?tag.cor+'22':'transparent')+'">' +
+      '<input type="checkbox" value="'+tag.nome+'" '+(selecionadas.includes(tag.nome)?'checked':'')+' style="display:none" onchange="sincronizarTagsSeletor(\''+containerId+'\')">' +
+      '<span style="width:7px;height:7px;border-radius:50%;background:'+tag.cor+'"></span>' +
+      '<span style="font-size:12px;color:'+(selecionadas.includes(tag.nome)?tag.cor:'var(--text2)')+'">'+tag.nome+'</span>' +
+    '</label>'
+  ).join('');
+}
+
+function sincronizarTagsSeletor(containerId) {
+  // Re-renderiza para atualizar visual dos selecionados
+  const selecionadas = getTagsSelecionadas(containerId);
+  renderSeletorTags(containerId, selecionadas);
+}
+
+function getTagsSelecionadas(containerId) {
+  const el = document.getElementById(containerId);
+  if (!el) return [];
+  return [...el.querySelectorAll('input[type=checkbox]:checked')].map(c => c.value);
+}
+
 function mostrarPreview(lancamentos) {
   if (!lancamentos.length) { toast('Nenhum lançamento encontrado no arquivo'); return; }
   const tbody = document.getElementById('tbody-preview');
@@ -705,8 +786,17 @@ function mostrarPreview(lancamentos) {
         '<select style="width:100%;padding:4px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:12px;margin-bottom:3px" onchange="previewLancs['+i+'].categoria=this.value;atualizarSubcatPreview('+i+',this.value)">'+catOpts+'</select>' +
         '<select id="subcat-preview-'+i+'" style="width:100%;padding:4px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:11px;color:var(--text2)" onchange="previewLancs['+i+'].subcategoria=this.value">'+subcatOpts+'</select>' +
       '</td>' +
-      '<td style="min-width:120px">' +
-        '<input type="text" placeholder="namoro, viagem..." value="'+(l.tags||[]).join(', ')+'" style="width:100%;padding:4px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:11px;color:var(--text2)" onchange="previewLancs['+i+'].tags=this.value.split(\',\').map(function(t){return t.trim();}).filter(Boolean)">' +
+      '<td style="min-width:120px" id="preview-tags-cell-'+i+'">' +
+        (DB.tags.length
+          ? DB.tags.map(tag =>
+              '<label style="display:inline-flex;align-items:center;gap:4px;margin:2px 3px 2px 0;cursor:pointer;padding:2px 7px;border-radius:99px;border:0.5px solid var(--border-light);font-size:11px">' +
+                '<input type="checkbox" value="'+tag.nome+'" '+((l.tags||[]).includes(tag.nome)?'checked':'')+' style="display:none" onchange="atualizarTagsPreview('+i+')">' +
+                '<span style="width:6px;height:6px;border-radius:50%;background:'+tag.cor+'"></span>' +
+                '<span style="color:var(--text2)">'+tag.nome+'</span>' +
+              '</label>'
+            ).join('')
+          : '<span style="font-size:11px;color:var(--text3)">Sem tags</span>'
+        ) +
       '</td>' +
       '<td><select style="padding:4px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:12px" onchange="previewLancs['+i+'].tipo=this.value">' +
         '<option value="despesa"'+(l.tipo==='despesa'?' selected':'')+'>Despesa</option>' +
@@ -734,6 +824,24 @@ function atualizarSubcatPreview(i, catId) {
   previewLancs[i].subcategoria = '';
 }
 
+function atualizarTagsPreview(i) {
+  const cell = document.getElementById('preview-tags-cell-' + i);
+  if (!cell) return;
+  const selecionadas = [...cell.querySelectorAll('input[type=checkbox]:checked')].map(c => c.value);
+  previewLancs[i].tags = selecionadas;
+  // Atualiza visual dos checkboxes
+  cell.querySelectorAll('label').forEach(label => {
+    const cb = label.querySelector('input');
+    const checked = cb.checked;
+    const tag = DB.tags.find(t => t.nome === cb.value);
+    if (tag) {
+      label.style.borderColor = checked ? tag.cor : 'var(--border-light)';
+      label.style.background = checked ? tag.cor + '22' : 'transparent';
+      label.querySelector('span:last-child').style.color = checked ? tag.cor : 'var(--text2)';
+    }
+  });
+}
+
 function ignorarPreview(i) { window.previewLancs.splice(i,1); mostrarPreview(window.previewLancs); toast('Ignorado'); }
 function removerPreview(i) { window.previewLancs.splice(i,1); mostrarPreview(window.previewLancs); }
 
@@ -750,7 +858,6 @@ function salvarImportacao() {
 function salvarManual(e) {
   e.preventDefault();
   const catId = document.getElementById('manual-categoria').value;
-  const tagsRaw = document.getElementById('manual-tags').value;
   DB.lancamentos.push({
     id: gerarId(),
     data: document.getElementById('manual-data').value,
@@ -759,10 +866,14 @@ function salvarManual(e) {
     tipo: document.getElementById('manual-tipo').value,
     categoria: catId,
     subcategoria: document.getElementById('manual-subcategoria').value,
-    tags: tagsRaw ? tagsRaw.split(',').map(t=>t.trim()).filter(Boolean) : [],
+    tags: getTagsSelecionadas('manual-tags-seletor'),
     status: 'validado'
   });
-  salvarDB(); e.target.reset(); atualizarBannerValidacao(); renderDashboard();
+  salvarDB();
+  // Limpa seletor de tags manualmente após reset
+  renderSeletorTags('manual-tags-seletor', []);
+  e.target.reset();
+  atualizarBannerValidacao(); renderDashboard();
   toast('Lançamento salvo!');
 }
 
