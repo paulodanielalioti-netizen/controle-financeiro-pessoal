@@ -144,7 +144,7 @@
                 <div class="form-group"><label>Subcategoria</label><select id="manual-subcategoria"><option value="">Sem subcategoria</option></select></div>
               </div>
               <div class="form-row">
-                <div class="form-group"><label>Tags (separadas por vírgula)</label><input type="text" id="manual-tags" placeholder="casamento, viagem..."></div>
+                <div class="form-group"><label>Tags</label><div id="manual-tags-seletor" style="display:flex;flex-wrap:wrap;gap:4px;padding:4px 0"></div></div>
               </div>
               <button type="submit" class="btn btn-accent">Salvar lançamento</button>
             </form>
@@ -168,14 +168,30 @@
         <div class="card"><table class="dre-table" id="dre-table"></table></div>
       </div>
 
-      <!-- PLANO!-- PLANO DE CONTAS -->
+      <!-- PLANO DE CONTAS -->
       <div id="page-planocontas" class="page">
         <div class="card">
           <div class="card-header">
             <div><div class="card-title">Plano de contas</div><div class="card-sub">Categorias, subcategorias e orçamentos mensais</div></div>
-            <button class="btn btn-accent" onclick="abrirModalCategoria()"><i class="ti ti-plus"></i> Nova categoria</button>
+            <div style="display:flex;gap:8px">
+              <button class="btn" onclick="abrirModalNovaTag()"><i class="ti ti-tag"></i> Nova tag</button>
+              <button class="btn btn-accent" onclick="abrirModalCategoria()"><i class="ti ti-plus"></i> Nova categoria</button>
+            </div>
           </div>
-          <div id="lista-plano-contas"></div>
+          <div class="import-tabs">
+            <button class="tab active" onclick="switchTabPlano('categorias',this)">Categorias</button>
+            <button class="tab" onclick="switchTabPlano('tags',this)">Tags</button>
+            <button class="tab" onclick="switchTabPlano('regras',this)">Regras</button>
+          </div>
+          <div id="plano-tab-categorias" class="tab-content active">
+            <div id="lista-plano-contas"></div>
+          </div>
+          <div id="plano-tab-tags" class="tab-content">
+            <div id="lista-tags"></div>
+          </div>
+          <div id="plano-tab-regras" class="tab-content">
+            <div id="lista-regras"></div>
+          </div>
         </div>
       </div>
 
@@ -247,7 +263,7 @@
       </div>
       <div class="form-row">
         <div class="form-group"><label>Tipo</label><select id="validar-tipo" onchange="atualizarCategoriasPorTipo('validar-tipo','validar-categoria')"><option value="despesa">Despesa</option><option value="receita">Receita</option><option value="interno">Movimentação interna</option></select></div>
-        <div class="form-group"><label>Tags (vírgula)</label><input type="text" id="validar-tags" placeholder="casamento, viagem..."></div>
+        <div class="form-group"><label>Tags</label><div id="validar-tags-seletor" style="display:flex;flex-wrap:wrap;gap:2px;padding:6px 0"></div></div>
       </div>
     </div>
     <div class="modal-footer">
@@ -276,7 +292,7 @@
       </div>
       <div class="form-row">
         <div class="form-group"><label>Tipo</label><select id="editar-tipo" onchange="atualizarCategoriasPorTipo('editar-tipo','editar-categoria')"><option value="despesa">Despesa</option><option value="receita">Receita</option><option value="interno">Movimentação interna</option></select></div>
-        <div class="form-group"><label>Tags (vírgula)</label><input type="text" id="editar-tags" placeholder="casamento, viagem..."></div>
+        <div class="form-group"><label>Tags</label><div id="editar-tags-seletor" style="display:flex;flex-wrap:wrap;gap:2px;padding:6px 0"></div></div>
       </div>
     </div>
     <div class="modal-footer">
@@ -320,6 +336,39 @@
     <div class="modal-footer">
       <button class="btn btn-accent" onclick="salvarNovaOuEditadaCategoria()">Salvar</button>
       <button class="btn" onclick="fecharModal('modal-edit-cat')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NOVA TAG -->
+<div id="modal-nova-tag" class="modal-overlay" style="display:none" onclick="fecharModal('modal-nova-tag')">
+  <div class="modal" onclick="event.stopPropagation()" style="width:380px">
+    <div class="modal-header">
+      <div class="modal-title">Nova tag</div>
+      <button class="btn-icon" onclick="fecharModal('modal-nova-tag')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group" style="margin-bottom:12px"><label>Nome</label><input type="text" id="nova-tag-nome" placeholder="Ex: namoro, viagem, trabalho..."></div>
+      <div class="form-group">
+        <label>Cor</label>
+        <div style="display:flex;align-items:center;gap:10px">
+          <input type="color" id="nova-tag-cor" value="#4f9cf9" style="width:48px;height:36px;border-radius:8px;border:0.5px solid var(--border-light);cursor:pointer;padding:2px">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <div onclick="document.getElementById('nova-tag-cor').value='#4f9cf9'" style="width:22px;height:22px;border-radius:50%;background:#4f9cf9;cursor:pointer"></div>
+            <div onclick="document.getElementById('nova-tag-cor').value='#e879f9'" style="width:22px;height:22px;border-radius:50%;background:#e879f9;cursor:pointer"></div>
+            <div onclick="document.getElementById('nova-tag-cor').value='#f59e0b'" style="width:22px;height:22px;border-radius:50%;background:#f59e0b;cursor:pointer"></div>
+            <div onclick="document.getElementById('nova-tag-cor').value='#10b981'" style="width:22px;height:22px;border-radius:50%;background:#10b981;cursor:pointer"></div>
+            <div onclick="document.getElementById('nova-tag-cor').value='#f43f5e'" style="width:22px;height:22px;border-radius:50%;background:#f43f5e;cursor:pointer"></div>
+            <div onclick="document.getElementById('nova-tag-cor').value='#8b5cf6'" style="width:22px;height:22px;border-radius:50%;background:#8b5cf6;cursor:pointer"></div>
+            <div onclick="document.getElementById('nova-tag-cor').value='#fb923c'" style="width:22px;height:22px;border-radius:50%;background:#fb923c;cursor:pointer"></div>
+            <div onclick="document.getElementById('nova-tag-cor').value='#14b8a6'" style="width:22px;height:22px;border-radius:50%;background:#14b8a6;cursor:pointer"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-accent" onclick="salvarNovaTag()">Salvar</button>
+      <button class="btn" onclick="fecharModal('modal-nova-tag')">Cancelar</button>
     </div>
   </div>
 </div>
