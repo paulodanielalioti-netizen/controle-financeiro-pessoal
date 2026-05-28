@@ -197,9 +197,19 @@ function renderDashboard() {
   setDelta('d-sobra', sobra, recAnt - despAnt);
   setDelta('d-patrimonio', pat, patAnt);
 
-  // Categorias com orçamento
+  // Filtro por tag no card de categorias
+  const dashTag = (document.getElementById('dash-filtro-tag')?.value || '').trim().toLowerCase();
+  const lancsFiltrados = dashTag
+    ? lancsMes.filter(l => (l.tags || []).some(t => t.toLowerCase().includes(dashTag)))
+    : lancsMes;
+
+  // Subtítulo dinâmico
+  const subEl = document.getElementById('dash-tag-sub');
+  if (subEl) subEl.textContent = dashTag ? 'Tag: ' + dashTag : 'vs orçamento';
+
+  // Categorias
   const porCat = {};
-  lancsMes.filter(l => l.tipo === 'despesa').forEach(l => {
+  lancsFiltrados.filter(l => l.tipo === 'despesa').forEach(l => {
     porCat[l.categoria] = (porCat[l.categoria] || 0) + l.valor;
   });
   const maxVal = Math.max(...Object.values(porCat), 1);
@@ -209,7 +219,7 @@ function renderDashboard() {
     const orc = DB.orcamentos[cat] || 0;
     const pct = orc > 0 ? Math.min(Math.round((val / orc) * 100), 100) : Math.round((val / maxVal) * 100);
     const corBarra = orc > 0 && val > orc ? '#ef4444' : getCor(cat);
-    const orcLabel = orc > 0 ? '<span style="font-size:10px;color:var(--text3);margin-left:4px">/ ' + fmt(orc) + '</span>' : '';
+    const orcLabel = orc > 0 && !dashTag ? '<span style="font-size:10px;color:var(--text3);margin-left:4px">/ ' + fmt(orc) + '</span>' : '';
     listaCats.innerHTML += '<div class="cat-item">' +
       '<span class="cat-label">' + getNomeCat(cat) + '</span>' +
       '<div class="cat-bar-bg"><div class="cat-bar" style="width:' + pct + '%;background:' + corBarra + '"></div></div>' +
@@ -693,8 +703,10 @@ function mostrarPreview(lancamentos) {
       '<td><input type="text" value="'+l.descricao.replace(/"/g,'&quot;')+'" style="width:100%;min-width:140px;padding:4px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:12px" onchange="previewLancs['+i+'].descricao=this.value"></td>' +
       '<td style="min-width:160px">' +
         '<select style="width:100%;padding:4px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:12px;margin-bottom:3px" onchange="previewLancs['+i+'].categoria=this.value;atualizarSubcatPreview('+i+',this.value)">'+catOpts+'</select>' +
-        '<select id="subcat-preview-'+i+'" style="width:100%;padding:4px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:11px;color:var(--text2);margin-bottom:3px" onchange="previewLancs['+i+'].subcategoria=this.value">'+subcatOpts+'</select>' +
-        '<input type="text" placeholder="tags..." value="'+(l.tags||[]).join(', ')+'" style="width:100%;padding:3px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:11px;color:var(--text2)" onchange="previewLancs['+i+'].tags=this.value.split(\',\').map(function(t){return t.trim();}).filter(Boolean)">' +
+        '<select id="subcat-preview-'+i+'" style="width:100%;padding:4px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:11px;color:var(--text2)" onchange="previewLancs['+i+'].subcategoria=this.value">'+subcatOpts+'</select>' +
+      '</td>' +
+      '<td style="min-width:120px">' +
+        '<input type="text" placeholder="namoro, viagem..." value="'+(l.tags||[]).join(', ')+'" style="width:100%;padding:4px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:11px;color:var(--text2)" onchange="previewLancs['+i+'].tags=this.value.split(\',\').map(function(t){return t.trim();}).filter(Boolean)">' +
       '</td>' +
       '<td><select style="padding:4px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:12px" onchange="previewLancs['+i+'].tipo=this.value">' +
         '<option value="despesa"'+(l.tipo==='despesa'?' selected':'')+'>Despesa</option>' +
@@ -1073,18 +1085,65 @@ function copiarResumo() {
 // ========================
 // SELECTS
 // ========================
+// Mapeamento de tipo para IDs de categoria
+function getCategoriasPorTipo(tipo) {
+  const receitas = ['rec_trabalho','rec_servicos','rec_projeto_ia','rec_investimentos','rec_eventual'];
+  const investimentos = ['inv_renda_fixa','inv_renda_var','inv_reservas','inv_negocio','inv_objetivos'];
+  const despesas = DB.categorias.map(c => c.id).filter(id => !receitas.includes(id) && !investimentos.includes(id) && id !== 'outros');
+  if (tipo === 'receita') return [...receitas, 'outros'];
+  if (tipo === 'investimento' || tipo === 'interno') return [...investimentos, 'outros'];
+  if (tipo === 'despesa') return [...despesas, 'outros'];
+  return DB.categorias.map(c => c.id);
+}
+
+function preencherSelectCategoriaPorTipo(selectId, tipo, valorAtual) {
+  const el = document.getElementById(selectId); if (!el) return;
+  const ids = getCategoriasPorTipo(tipo);
+  const cats = DB.categorias.filter(c => ids.includes(c.id));
+  el.innerHTML = cats.map(c => '<option value="'+c.id+'"'+(c.id===valorAtual?' selected':'')+'>'+c.nome+'</option>').join('');
+}
+
 function preencherSelects() {
-  ['manual-categoria','validar-categoria','filtro-categoria'].forEach(id => {
-    const el = document.getElementById(id); if (!el) return;
-    const isFilter = id === 'filtro-categoria';
-    el.innerHTML = (isFilter ? '<option value="">Todas as categorias</option>' : '') +
+  // Filtro de lançamentos — mostra todas
+  const filtro = document.getElementById('filtro-categoria');
+  if (filtro) {
+    filtro.innerHTML = '<option value="">Todas as categorias</option>' +
       DB.categorias.map(c => '<option value="'+c.id+'">'+c.nome+'</option>').join('');
-  });
+  }
+  // Manual — filtra pelo tipo selecionado
+  const tipoManual = document.getElementById('manual-tipo');
+  const catManual = document.getElementById('manual-categoria');
+  if (tipoManual && catManual) {
+    preencherSelectCategoriaPorTipo('manual-categoria', tipoManual.value, catManual.value);
+  }
 }
 
 function preencherSelectCategoria(id, valor) {
   const el = document.getElementById(id); if (!el) return;
-  el.innerHTML = DB.categorias.map(c => '<option value="'+c.id+'"'+(c.id===valor?' selected':'')+'>'+c.nome+'</option>').join('');
+  // Descobre o tipo do contexto para filtrar
+  let tipo = '';
+  if (id === 'editar-categoria') {
+    const t = document.getElementById('editar-tipo');
+    if (t) tipo = t.value;
+  } else if (id === 'validar-categoria') {
+    const t = document.getElementById('validar-tipo');
+    if (t) tipo = t.value;
+  }
+  const ids = tipo ? getCategoriasPorTipo(tipo) : DB.categorias.map(c => c.id);
+  const cats = DB.categorias.filter(c => ids.includes(c.id));
+  el.innerHTML = cats.map(c => '<option value="'+c.id+'"'+(c.id===valor?' selected':'')+'>'+c.nome+'</option>').join('');
+}
+
+function atualizarCategoriasPorTipo(selectTipoId, selectCatId) {
+  const tipo = document.getElementById(selectTipoId)?.value || '';
+  preencherSelectCategoriaPorTipo(selectCatId, tipo, '');
+  // Limpa subcategoria
+  const subcatMap = { 'manual-categoria': 'manual-subcategoria', 'editar-categoria': 'editar-subcategoria', 'validar-categoria': 'validar-subcategoria' };
+  const subcatId = subcatMap[selectCatId];
+  if (subcatId) {
+    const sel = document.getElementById(subcatId);
+    if (sel) sel.innerHTML = '<option value="">Sem subcategoria</option>';
+  }
 }
 
 // ========================
