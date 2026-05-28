@@ -64,7 +64,13 @@
         </div>
         <div class="row-2">
           <div class="card">
-            <div class="card-header"><div><div class="card-title">Gastos por categoria</div><div class="card-sub">vs orçamento</div></div></div>
+            <div class="card-header">
+              <div><div class="card-title">Gastos por categoria</div><div class="card-sub" id="dash-tag-sub">vs orçamento</div></div>
+              <div style="display:flex;align-items:center;gap:6px">
+                <input type="text" id="dash-filtro-tag" placeholder="🏷 filtrar por tag..." style="padding:5px 10px;border-radius:8px;border:0.5px solid var(--border-light);font-size:12px;font-family:inherit;width:160px" oninput="renderDashboard()">
+                <button class="btn" style="font-size:11px;padding:4px 8px;color:var(--text3)" onclick="document.getElementById('dash-filtro-tag').value='';renderDashboard()" title="Limpar filtro"><i class="ti ti-x"></i></button>
+              </div>
+            </div>
             <div id="lista-categorias" class="category-list"></div>
           </div>
           <div class="card">
@@ -131,7 +137,7 @@
               </div>
               <div class="form-row">
                 <div class="form-group" style="flex:2"><label>Descrição</label><input type="text" id="manual-descricao" placeholder="Ex: iFood, Uber..." required></div>
-                <div class="form-group"><label>Tipo</label><select id="manual-tipo"><option value="despesa">Despesa</option><option value="receita">Receita</option><option value="interno">Movimentação interna</option></select></div>
+                <div class="form-group"><label>Tipo</label><select id="manual-tipo" onchange="atualizarCategoriasPorTipo('manual-tipo','manual-categoria')"><option value="despesa">Despesa</option><option value="receita">Receita</option><option value="interno">Movimentação interna</option></select></div>
               </div>
               <div class="form-row">
                 <div class="form-group"><label>Categoria</label><select id="manual-categoria" onchange="atualizarSubcatManual()"></select></div>
@@ -150,7 +156,7 @@
             <button class="btn btn-dark" onclick="salvarImportacao()">Salvar todos</button>
           </div>
           <table class="tx-table">
-            <thead><tr><th>Data</th><th>Descrição</th><th>Categoria / Subcategoria</th><th>Tipo</th><th>Valor</th><th></th></tr></thead>
+            <thead><tr><th>Data</th><th>Descrição</th><th>Categoria / Subcategoria</th><th>Tags</th><th>Tipo</th><th>Valor</th><th></th></tr></thead>
             <tbody id="tbody-preview"></tbody>
           </table>
         </div>
@@ -240,7 +246,7 @@
         <div class="form-group"><label>Subcategoria</label><select id="validar-subcategoria"><option value="">Sem subcategoria</option></select></div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label>Tipo</label><select id="validar-tipo"><option value="despesa">Despesa</option><option value="receita">Receita</option><option value="interno">Movimentação interna</option></select></div>
+        <div class="form-group"><label>Tipo</label><select id="validar-tipo" onchange="atualizarCategoriasPorTipo('validar-tipo','validar-categoria')"><option value="despesa">Despesa</option><option value="receita">Receita</option><option value="interno">Movimentação interna</option></select></div>
         <div class="form-group"><label>Tags (vírgula)</label><input type="text" id="validar-tags" placeholder="casamento, viagem..."></div>
       </div>
     </div>
@@ -269,7 +275,7 @@
         <div class="form-group"><label>Subcategoria</label><select id="editar-subcategoria"><option value="">Sem subcategoria</option></select></div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label>Tipo</label><select id="editar-tipo"><option value="despesa">Despesa</option><option value="receita">Receita</option><option value="interno">Movimentação interna</option></select></div>
+        <div class="form-group"><label>Tipo</label><select id="editar-tipo" onchange="atualizarCategoriasPorTipo('editar-tipo','editar-categoria')"><option value="despesa">Despesa</option><option value="receita">Receita</option><option value="interno">Movimentação interna</option></select></div>
         <div class="form-group"><label>Tags (vírgula)</label><input type="text" id="editar-tags" placeholder="casamento, viagem..."></div>
       </div>
     </div>
