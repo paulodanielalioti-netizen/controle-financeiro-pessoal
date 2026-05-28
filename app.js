@@ -5,26 +5,36 @@ let DB = {
   lancamentos: [],
   patrimonio: [],
   categorias: [
-    { id: 'alimentacao',      nome: 'Alimentação',         cor: '#4f9cf9', codigo: '1.1', subcats: ['Amigos','Família','Individual','Outros'] },
-    { id: 'academia',         nome: 'Academia',             cor: '#10b981', codigo: '1.2', subcats: ['Mensalidade','Creatina','Pré-treino','Protocolo','Whey','Outros'] },
-    { id: 'assinaturas',      nome: 'Assinaturas Digitais', cor: '#6366f1', codigo: '1.3', subcats: ['Google','Streaming','Apps','Outros'] },
-    { id: 'beleza',           nome: 'Beleza',               cor: '#f43f5e', codigo: '1.4', subcats: ['Barbearia','Cosméticos','Minoxidil','Perfume','Outros'] },
-    { id: 'casa',             nome: 'Casa',                 cor: '#84cc16', codigo: '1.5', subcats: ['Aluguel','Internet','Semae','Condomínio','Outros'] },
-    { id: 'comunicacao',      nome: 'Comunicação',          cor: '#0ea5e9', codigo: '1.6', subcats: ['Vivo','Outros'] },
-    { id: 'esporte',          nome: 'Esporte',              cor: '#f59e0b', codigo: '1.7', subcats: ['Muay thai','Ciclismo','Corrida','Diversos'] },
-    { id: 'formacao',         nome: 'Formação',             cor: '#8b5cf6', codigo: '1.8', subcats: ['Curso','Livro','Mentoria','Unicesumar','Outros'] },
-    { id: 'igreja',           nome: 'Igreja',               cor: '#ec4899', codigo: '1.9', subcats: ['Dízimo','Eventos','Oferta','Outros'] },
-    { id: 'lazer',            nome: 'Lazer',                cor: '#14b8a6', codigo: '1.10', subcats: ['Cinema','Conferências','Entretenimento','Futebol','Parque','Rolê','Viagem','Violão','Outros'] },
-    { id: 'namoro',           nome: 'Namoro',               cor: '#e879f9', codigo: '1.11', subcats: ['Saídas','Presentes','Viagens','Outros'] },
-    { id: 'pontual',          nome: 'Pontual',              cor: '#fb923c', codigo: '1.12', subcats: ['Eletrônico','Móvel','Vestuário','Utilitários','Diversos'] },
-    { id: 'presente',         nome: 'Presente',             cor: '#f87171', codigo: '1.13', subcats: ['Aniversário','Celebrações','Eventos','Outros'] },
-    { id: 'saude',            nome: 'Saúde',                cor: '#2dd4bf', codigo: '1.14', subcats: ['Convênio','Nutricionista','Psicólogo','Quiropraxia','Remédio','Outros'] },
-    { id: 'roupas',           nome: 'Roupas',               cor: '#a78bfa', codigo: '1.15', subcats: ['Acessórios','Camiseta','Calça','Sapatos','Outros'] },
-    { id: 'transp_carro',     nome: 'Transporte - Carro',   cor: '#2258c4', codigo: '1.16', subcats: ['Combustível','Manutenção','Impostos','Pneus'] },
-    { id: 'transp_moto',      nome: 'Transporte - Moto',    cor: '#1a3a7c', codigo: '1.17', subcats: ['Combustível','Manutenção','Impostos'] },
-    { id: 'transp_demais',    nome: 'Transporte - Demais',  cor: '#475569', codigo: '1.18', subcats: ['Estacionamento','Multa','Uber','Outros'] },
-    { id: 'investimento',     nome: 'Investimento',         cor: '#0d9488', codigo: '2.1', subcats: [] },
-    { id: 'outros',           nome: 'Outros',               cor: '#94a3b8', codigo: '9.9', subcats: [] },
+    // ── RECEITAS ──
+    { id: 'rec_trabalho',     nome: 'Trabalho Fixo',             cor: '#16a34a', codigo: '1.1', subcats: ['Salário Mar&Rio','Comissões'] },
+    { id: 'rec_servicos',     nome: 'Prestação de Serviços',     cor: '#15803d', codigo: '1.2', subcats: ['Clínica de Fisioterapia','BPO Financeiro','Consultoria Contábil','Outros'] },
+    { id: 'rec_projeto_ia',   nome: 'Projeto IA / Automação',    cor: '#166534', codigo: '1.3', subcats: ['Receita Operacional','Participação Societária'] },
+    { id: 'rec_investimentos', nome: 'Rendimentos',              cor: '#14532d', codigo: '1.4', subcats: ['Dividendos','Juros / Renda Fixa','CDB / LCI / LCA','Outros'] },
+    { id: 'rec_eventual',     nome: 'Eventual',                  cor: '#4ade80', codigo: '1.5', subcats: ['Venda de Bens','Outros'] },
+    // ── DESPESAS FIXAS ──
+    { id: 'moradia',          nome: 'Moradia',                   cor: '#84cc16', codigo: '2.1', subcats: ['Aluguel','Condomínio','Internet','Água (Semae)','Energia Elétrica','Gás','Outros'] },
+    { id: 'transp_fixo',      nome: 'Transporte Fixo',           cor: '#65a30d', codigo: '2.2', subcats: ['IPVA / Licenciamento','Seguro do Veículo','Financiamento Veículo'] },
+    { id: 'assinaturas',      nome: 'Assinaturas',               cor: '#6366f1', codigo: '2.3', subcats: ['Telefone','Streaming','Google','Apps','Outros'] },
+    { id: 'faculdade',        nome: 'Faculdade',                 cor: '#8b5cf6', codigo: '2.4', subcats: ['Mensalidade Estácio','Material'] },
+    { id: 'igreja',           nome: 'Igreja',                    cor: '#ec4899', codigo: '2.5', subcats: ['Dízimo','Oferta','Eventos'] },
+    // ── DESPESAS VARIÁVEIS ──
+    { id: 'alimentacao',      nome: 'Alimentação',               cor: '#f59e0b', codigo: '3.1', subcats: ['Mercado','Delivery','Restaurante','Outros'] },
+    { id: 'transp_variavel',  nome: 'Transporte Variável',       cor: '#d97706', codigo: '3.2', subcats: ['Combustível Carro','Combustível Moto','Manutenção Carro','Manutenção Moto','Pneus','Uber','Estacionamento','Multa'] },
+    { id: 'saude_corpo',      nome: 'Saúde & Corpo',             cor: '#2dd4bf', codigo: '3.3', subcats: ['Academia','Muay thai','Suplemento','Convênio','Nutricionista','Psicólogo','Quiropraxia','Remédio','Equipamentos','Outros'] },
+    { id: 'cuidado_pessoal',  nome: 'Cuidado Pessoal',           cor: '#f43f5e', codigo: '3.4', subcats: ['Barbearia','Cosméticos','Outros'] },
+    { id: 'formacao',         nome: 'Formação',                  cor: '#a855f7', codigo: '3.5', subcats: ['Cursos','Livros','Mentoria','Outros'] },
+    { id: 'lazer',            nome: 'Lazer',                     cor: '#14b8a6', codigo: '3.6', subcats: ['Cinema','Rolê / Social','Viagem','Entretenimento','Conferências','Outros'] },
+    // ── GASTOS PONTUAIS ──
+    { id: 'compras',          nome: 'Compras',                   cor: '#fb923c', codigo: '4.1', subcats: ['Vestuário','Eletrônico','Eletrodoméstico','Móvel','Utilitários','Outros'] },
+    { id: 'presentes',        nome: 'Presentes & Datas',         cor: '#f87171', codigo: '4.2', subcats: ['Aniversário','Celebrações','Outros'] },
+    // ── INVESTIMENTOS & PATRIMÔNIO ──
+    { id: 'inv_renda_fixa',   nome: 'Renda Fixa',                cor: '#0d9488', codigo: '5.1', subcats: ['CDB','LCI / LCA','Tesouro Direto'] },
+    { id: 'inv_renda_var',    nome: 'Renda Variável',            cor: '#0f766e', codigo: '5.2', subcats: ['Ações','FIIs','ETFs','BDRs'] },
+    { id: 'inv_reservas',     nome: 'Reservas',                  cor: '#115e59', codigo: '5.3', subcats: ['Reserva de Emergência','Reserva de Oportunidade'] },
+    { id: 'inv_negocio',      nome: 'Negócio',                   cor: '#134e4a', codigo: '5.4', subcats: ['Aporte Projeto IA','Ferramentas / Infraestrutura'] },
+    { id: 'inv_objetivos',    nome: 'Objetivos Futuros',         cor: '#4f9cf9', codigo: '5.5', subcats: ['Poupança Casamento','Fundo Imóvel'] },
+    // ── OUTROS ──
+    { id: 'outros',           nome: 'Outros',                    cor: '#94a3b8', codigo: '9.9', subcats: [] },
   ],
   orcamentos: {},
   regras: [],
@@ -600,23 +610,25 @@ function classificarCategoria(descricao) {
   const regra = DB.regras.find(r => descricao.toLowerCase().includes(r.chave.toLowerCase()));
   if (regra) return regra.categoria;
 
-  // 2. Classificação automática
+  // 2. Classificação automática com novos IDs
   const desc = descricao.toLowerCase();
   if (['ifood','rappi','restaurante','lanche','padaria','mercado','supermercado','hortifruti','hamburguer','esfiha','espetinho','suco','amigao','lost distrib','d fattori','delivery'].some(p => desc.includes(p))) return 'alimentacao';
-  if (['sua academia','academia'].some(p => desc.includes(p))) return 'academia';
   if (['netflix','spotify','google one','disney','prime video','apple','adobe','canva'].some(p => desc.includes(p))) return 'assinaturas';
-  if (['barbearia','cosmetico','minoxidil','perfume','salao'].some(p => desc.includes(p))) return 'beleza';
-  if (['aluguel','condominio','semae','copasa','sabesp'].some(p => desc.includes(p))) return 'casa';
-  if (['vivo','tim','claro','oi ','telefonica','conta vivo'].some(p => desc.includes(p))) return 'comunicacao';
-  if (['muay','ciclismo','corrida','bike'].some(p => desc.includes(p))) return 'esporte';
-  if (['estacio','unicesumar','faculdade','mensalidade','ead','economista','vitru','curso','mentoria'].some(p => desc.includes(p))) return 'formacao';
+  if (['vivo','tim','claro','oi ','telefonica','conta vivo'].some(p => desc.includes(p))) return 'assinaturas';
+  if (['aluguel','condominio','semae','copasa','sabesp','energia','luz ','cemar','cemig','copel'].some(p => desc.includes(p))) return 'moradia';
+  if (['estacio','unicesumar','faculdade','mensalidade','ead','economista','vitru'].some(p => desc.includes(p))) return 'faculdade';
+  if (['curso','mentoria'].some(p => desc.includes(p))) return 'formacao';
   if (['dizimo','oferta','igreja','revoada','serv revoada','festa revoada'].some(p => desc.includes(p))) return 'igreja';
   if (['cinema','ingresso','parque','shows','show ','concert','futebol'].some(p => desc.includes(p))) return 'lazer';
-  if (['joalheria','joalhe','amsterdam','amisterdan','flores'].some(p => desc.includes(p))) return 'namoro';
-  if (['farmacia','medico','hospital','clinica','remedio','nutricionista','psicologo','quiropraxia','convenio'].some(p => desc.includes(p))) return 'saude';
-  if (['shopee','mercadolivre','amazon','americanas','magazine','casas bahia','renner','shein'].some(p => desc.includes(p))) return 'pontual';
-  if (['postopalace','posto uni','posto bene','posto porcino','auto posto','combustivel','shell','petrobras','ipiranga'].some(p => desc.includes(p))) return 'transp_carro';
-  if (['uberrides','uber','99app','estacionamento','multa'].some(p => desc.includes(p))) return 'transp_demais';
+  if (['farmacia','medico','hospital','clinica','remedio','nutricionista','psicologo','quiropraxia','convenio'].some(p => desc.includes(p))) return 'saude_corpo';
+  if (['academia','muay','ciclismo','corrida','bike','suplemento','whey','creatina'].some(p => desc.includes(p))) return 'saude_corpo';
+  if (['barbearia','cosmetico','minoxidil','perfume','salao'].some(p => desc.includes(p))) return 'cuidado_pessoal';
+  if (['shopee','mercadolivre','amazon','americanas','magazine','casas bahia','renner','shein'].some(p => desc.includes(p))) return 'compras';
+  if (['joalheria','joalhe','amsterdam','amisterdan','flores'].some(p => desc.includes(p))) return 'presentes';
+  if (['postopalace','posto uni','posto bene','posto porcino','auto posto','combustivel','shell','petrobras','ipiranga'].some(p => desc.includes(p))) return 'transp_variavel';
+  if (['uberrides','uber','99app','estacionamento','multa'].some(p => desc.includes(p))) return 'transp_variavel';
+  if (['ipva','seguro','licenciamento'].some(p => desc.includes(p))) return 'transp_fixo';
+  if (['cdb','lci','lca','tesouro','acoes','fii','etf','bdr','xp investimentos','inter invest'].some(p => desc.includes(p))) return 'inv_renda_fixa';
   return 'outros';
 }
 
