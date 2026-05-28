@@ -793,135 +793,33 @@ function renderPlanoContas() {
   const lista = document.getElementById('lista-plano-contas');
   if (!lista) return;
   lista.innerHTML = '';
-  DB.categorias.forEach((cat, idx) => {
+  DB.categorias.forEach(cat => {
     const orc = DB.orcamentos[cat.id] || 0;
-    const podeSubirCat = idx > 0;
-    const podeDescer = idx < DB.categorias.length - 1;
-    lista.innerHTML +=
-      '<div class="plano-cat-item" id="plano-'+cat.id+'">' +
-        '<div class="plano-cat-header">' +
-          '<div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">' +
-            // Seletor de cor inline
-            '<div style="position:relative;flex-shrink:0">' +
-              '<div style="width:14px;height:14px;border-radius:50%;background:'+cat.cor+';cursor:pointer;border:2px solid rgba(0,0,0,0.08)" onclick="abrirColorPicker(\''+cat.id+'\')" title="Alterar cor"></div>' +
-              '<input type="color" id="color-picker-'+cat.id+'" value="'+cat.cor+'" style="position:absolute;opacity:0;width:0;height:0" onchange="salvarCorCategoria(\''+cat.id+'\',this.value)">' +
-            '</div>' +
-            // Código editável
-            '<input type="text" value="'+(cat.codigo||'')+'" placeholder="Cód" ' +
-              'style="width:44px;font-size:11px;color:var(--text3);border:none;background:transparent;text-align:center;padding:2px 0;cursor:text;font-family:inherit" ' +
-              'title="Editar código" ' +
-              'onblur="salvarCodigoCategoria(\''+cat.id+'\',this.value)" ' +
-              'onkeydown="if(event.key===\'Enter\')this.blur()">' +
-            // Nome editável
-            '<input type="text" value="'+cat.nome.replace(/"/g,'&quot;')+'" ' +
-              'style="flex:1;min-width:0;font-size:14px;font-weight:500;border:none;background:transparent;color:var(--text);font-family:inherit;padding:2px 4px;cursor:text;border-radius:4px" ' +
-              'title="Editar nome" ' +
-              'onblur="salvarNomeCategoria(\''+cat.id+'\',this.value)" ' +
-              'onkeydown="if(event.key===\'Enter\')this.blur()">' +
-          '</div>' +
-          '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">' +
-            // Reordenar categoria
-            '<button class="btn" style="font-size:11px;padding:2px 6px;color:var(--text3)" title="Mover para cima" onclick="moverCategoria(\''+cat.id+'\',-1)"'+(podeSubirCat?'':' disabled style="font-size:11px;padding:2px 6px;opacity:0.3"')+'>↑</button>' +
-            '<button class="btn" style="font-size:11px;padding:2px 6px;color:var(--text3)" title="Mover para baixo" onclick="moverCategoria(\''+cat.id+'\',1)"'+(podeDescer?'':' disabled style="font-size:11px;padding:2px 6px;opacity:0.3"')+'>↓</button>' +
-            '<div class="orc-input-wrap">' +
-              '<span style="font-size:11px;color:var(--text3)">Orç:</span>' +
-              '<input type="number" class="orc-input" value="'+(orc||'')+'" placeholder="—" onchange="salvarOrcamento(\''+cat.id+'\',this.value)" step="0.01">' +
-            '</div>' +
-            '<button class="btn" style="font-size:11px;padding:3px 8px" onclick="adicionarSubcat(\''+cat.id+'\')" title="Nova subcategoria"><i class="ti ti-plus"></i></button>' +
-            '<button class="btn" style="font-size:11px;padding:3px 8px;color:var(--red)" onclick="excluirCategoria(\''+cat.id+'\')" title="Excluir categoria"><i class="ti ti-trash"></i></button>' +
-          '</div>' +
+    lista.innerHTML += '<div class="plano-cat-item" id="plano-'+cat.id+'">' +
+      '<div class="plano-cat-header">' +
+        '<div style="display:flex;align-items:center;gap:10px">' +
+          '<div style="width:12px;height:12px;border-radius:50%;background:'+cat.cor+';flex-shrink:0"></div>' +
+          '<span style="font-size:14px;font-weight:500">'+cat.nome+'</span>' +
         '</div>' +
-        '<div class="plano-subcats" id="subcats-'+cat.id+'">' +
-          (cat.subcats||[]).map((s, si) => {
-            const podeSubir = si > 0;
-            const podeBaixo = si < (cat.subcats||[]).length - 1;
-            return '<div class="subcat-item">' +
-              '<div style="display:flex;align-items:center;gap:6px;flex:1">' +
-                '<span style="color:var(--text3);font-size:12px">›</span>' +
-                '<input type="text" value="'+s.replace(/"/g,'&quot;')+'" ' +
-                  'style="flex:1;font-size:13px;color:var(--text2);border:none;background:transparent;font-family:inherit;padding:2px 4px;border-radius:4px;cursor:text" ' +
-                  'title="Editar subcategoria" ' +
-                  'onblur="renomearSubcat(\''+cat.id+'\','+si+',this.value)" ' +
-                  'onkeydown="if(event.key===\'Enter\')this.blur()">' +
-              '</div>' +
-              '<div style="display:flex;gap:4px">' +
-                '<button class="btn" style="font-size:10px;padding:1px 5px;color:var(--text3)" title="Subir" onclick="moverSubcat(\''+cat.id+'\','+si+',-1)"'+(podeSubir?'':' disabled style="font-size:10px;padding:1px 5px;opacity:0.3"')+'>↑</button>' +
-                '<button class="btn" style="font-size:10px;padding:1px 5px;color:var(--text3)" title="Descer" onclick="moverSubcat(\''+cat.id+'\','+si+',1)"'+(podeBaixo?'':' disabled style="font-size:10px;padding:1px 5px;opacity:0.3"')+'>↓</button>' +
-                '<button class="btn" style="font-size:10px;padding:2px 6px;color:var(--red)" onclick="excluirSubcat(\''+cat.id+'\',\''+s.replace(/'/g,"\\'")+'\')" title="Excluir"><i class="ti ti-x"></i></button>' +
-              '</div>' +
-            '</div>';
-          }).join('') +
+        '<div style="display:flex;align-items:center;gap:8px">' +
+          '<div class="orc-input-wrap">' +
+            '<span style="font-size:12px;color:var(--text2)">Orçamento:</span>' +
+            '<input type="number" class="orc-input" value="'+(orc||'')+'" placeholder="—" onchange="salvarOrcamento(\''+cat.id+'\',this.value)" step="0.01">' +
+          '</div>' +
+          '<button class="btn" style="font-size:11px;padding:3px 8px" onclick="adicionarSubcat(\''+cat.id+'\')"><i class="ti ti-plus"></i></button>' +
+          '<button class="btn" style="font-size:11px;padding:3px 8px;color:var(--red)" onclick="excluirCategoria(\''+cat.id+'\')"><i class="ti ti-trash"></i></button>' +
         '</div>' +
-      '</div>';
+      '</div>' +
+      '<div class="plano-subcats" id="subcats-'+cat.id+'">' +
+        (cat.subcats||[]).map(s =>
+          '<div class="subcat-item">' +
+            '<span style="font-size:13px;color:var(--text2)">› '+s+'</span>' +
+            '<button class="btn" style="font-size:10px;padding:2px 6px;color:var(--red)" onclick="excluirSubcat(\''+cat.id+'\',\''+s+'\')"><i class="ti ti-x"></i></button>' +
+          '</div>'
+        ).join('') +
+      '</div>' +
+    '</div>';
   });
-}
-
-function abrirColorPicker(catId) {
-  const input = document.getElementById('color-picker-' + catId);
-  if (input) input.click();
-}
-
-function salvarCorCategoria(catId, cor) {
-  const cat = DB.categorias.find(c => c.id === catId);
-  if (!cat) return;
-  cat.cor = cor;
-  salvarDB(); renderPlanoContas(); renderDashboard();
-  toast('Cor atualizada!');
-}
-
-function salvarNomeCategoria(catId, nome) {
-  nome = nome.trim();
-  if (!nome) { renderPlanoContas(); return; }
-  const cat = DB.categorias.find(c => c.id === catId);
-  if (!cat || cat.nome === nome) return;
-  cat.nome = nome;
-  salvarDB(); preencherSelects();
-  toast('Nome salvo!');
-}
-
-function salvarCodigoCategoria(catId, codigo) {
-  const cat = DB.categorias.find(c => c.id === catId);
-  if (!cat) return;
-  cat.codigo = codigo.trim();
-  salvarDB();
-}
-
-function moverCategoria(catId, dir) {
-  const idx = DB.categorias.findIndex(c => c.id === catId);
-  if (idx < 0) return;
-  const novo = idx + dir;
-  if (novo < 0 || novo >= DB.categorias.length) return;
-  const temp = DB.categorias[idx];
-  DB.categorias[idx] = DB.categorias[novo];
-  DB.categorias[novo] = temp;
-  salvarDB(); renderPlanoContas(); preencherSelects();
-}
-
-function moverSubcat(catId, si, dir) {
-  const cat = DB.categorias.find(c => c.id === catId);
-  if (!cat || !cat.subcats) return;
-  const novo = si + dir;
-  if (novo < 0 || novo >= cat.subcats.length) return;
-  const temp = cat.subcats[si];
-  cat.subcats[si] = cat.subcats[novo];
-  cat.subcats[novo] = temp;
-  salvarDB(); renderPlanoContas();
-}
-
-function renomearSubcat(catId, si, novoNome) {
-  novoNome = novoNome.trim();
-  if (!novoNome) { renderPlanoContas(); return; }
-  const cat = DB.categorias.find(c => c.id === catId);
-  if (!cat || !cat.subcats) return;
-  const nomeAntigo = cat.subcats[si];
-  if (nomeAntigo === novoNome) return;
-  // Atualiza lançamentos existentes
-  DB.lancamentos.forEach(l => {
-    if (l.categoria === catId && l.subcategoria === nomeAntigo) l.subcategoria = novoNome;
-  });
-  cat.subcats[si] = novoNome;
-  salvarDB(); preencherSelects();
-  toast('Subcategoria renomeada!');
 }
 
 function salvarOrcamento(catId, valor) {
@@ -933,12 +831,12 @@ function salvarOrcamento(catId, valor) {
 
 function adicionarSubcat(catId) {
   const nome = prompt('Nome da subcategoria:');
-  if (!nome || !nome.trim()) return;
+  if (!nome) return;
   const cat = DB.categorias.find(c => c.id === catId);
   if (!cat) return;
   if (!cat.subcats) cat.subcats = [];
-  if (cat.subcats.includes(nome.trim())) { toast('Subcategoria já existe'); return; }
-  cat.subcats.push(nome.trim());
+  if (cat.subcats.includes(nome)) { toast('Subcategoria já existe'); return; }
+  cat.subcats.push(nome);
   salvarDB(); renderPlanoContas(); preencherSelects();
   toast('Subcategoria criada!');
 }
@@ -960,6 +858,8 @@ function abrirModalCategoria() {
 }
 
 function salvarNovaOuEditadaCategoria() {
+  const catId = document.getElementById('edit-cat-id').value;
+  if (catId) { salvarEdicaoCategoria(); return; }
   const nome = document.getElementById('edit-cat-nome').value.trim();
   const codigo = document.getElementById('edit-cat-codigo').value.trim();
   const cor = document.getElementById('edit-cat-cor').value;
@@ -1062,7 +962,7 @@ function copiarResumo() {
 // SELECTS
 // ========================
 function preencherSelects() {
-  ['manual-categoria','validar-categoria','filtro-categoria'].forEach(id => {
+  ['manual-categoria','validar-categoria','filtro-categoria','rec-categoria'].forEach(id => {
     const el = document.getElementById(id); if (!el) return;
     const isFilter = id === 'filtro-categoria';
     el.innerHTML = (isFilter ? '<option value="">Todas as categorias</option>' : '') +
