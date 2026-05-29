@@ -39,6 +39,7 @@ let DB = {
   orcamentos: {},
   regras: [],
   tags: [],
+  ignorados: [],
   config: { nome: 'Paulo Alioti', meta: 1000000 }
 };
 
@@ -71,19 +72,50 @@ function carregarDB() {
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
-      // Merge preservando defaults
       DB.lancamentos = parsed.lancamentos || [];
       DB.patrimonio = parsed.patrimonio || [];
       DB.orcamentos = parsed.orcamentos || {};
       DB.regras = parsed.regras || [];
       DB.tags = parsed.tags || [];
+      DB.ignorados = parsed.ignorados || [];
       DB.config = { ...DB.config, ...(parsed.config || {}) };
-      // Merge categorias preservando subcats
       if (parsed.categorias && parsed.categorias.length) {
         DB.categorias = parsed.categorias.map(pc => {
           const def = DB.categorias.find(d => d.id === pc.id);
           return { ...pc, subcats: pc.subcats || (def ? def.subcats : []) };
         });
+      }
+      // Migração automática de IDs antigos
+      if (!parsed.migradoV2) {
+        const mapa = {
+          'academia': 'saude_corpo', 'esporte': 'saude_corpo', 'saude': 'saude_corpo',
+          'beleza': 'cuidado_pessoal', 'casa': 'moradia', 'comunicacao': 'assinaturas',
+          'transp_carro': 'transp_variavel', 'transp_moto': 'transp_variavel', 'transp_demais': 'transp_variavel',
+          'pontual': 'compras', 'namoro': 'lazer', 'presente': 'presentes',
+          'roupas': 'compras', 'investimento': 'inv_renda_fixa'
+        };
+        let migrou = false;
+        DB.lancamentos.forEach(l => {
+          if (mapa[l.categoria]) { l.categoria = mapa[l.categoria]; migrou = true; }
+        });
+        DB.regras.forEach(r => {
+          if (mapa[r.categoria]) { r.categoria = mapa[r.categoria]; migrou = true; }
+        });
+        // Renomear subcategoria Unicesumar → Faculdade
+        DB.lancamentos.forEach(l => {
+          if (l.subcategoria === 'Unicesumar') { l.subcategoria = 'Faculdade'; migrou = true; }
+        });
+        // Atualiza subcat no plano de contas
+        const catFaculdade = DB.categorias.find(c => c.id === 'faculdade');
+        if (catFaculdade && catFaculdade.subcats) {
+          const idx = catFaculdade.subcats.indexOf('Unicesumar');
+          if (idx !== -1) { catFaculdade.subcats[idx] = 'Faculdade'; migrou = true; }
+        }
+        if (migrou) {
+          DB.migradoV2 = true;
+          salvarDB();
+          console.log('Migração v2 concluída');
+        }
       }
     } catch(e) { console.error('Erro ao carregar DB', e); }
   }
@@ -165,7 +197,43 @@ function gerarId() {
 // ========================
 // DASHBOARD
 // ========================
+function preencherSeletorMesDashboard() {
+  const sel = document.getElementById('dash-mes-select');
+  if (!sel) return;
+  // Coleta todos os meses com lançamentos + mês atual
+  const meses = [...new Set([mesAtual, ...DB.lancamentos.map(l => l.data.slice(0,7))])].sort().reverse();
+  sel.innerHTML = meses.map(m => {
+    const [y, mo] = m.split('-');
+    const label = new Date(parseInt(y), parseInt(mo)-1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    return '<option value="'+m+'"'+(m===mesAtual?' selected':'')+'>'+label.charAt(0).toUpperCase()+label.slice(1)+'</option>';
+  }).join('');
+}
+
+function preencherSeletorTagDashboard() {
+  const sel = document.getElementById('dash-filtro-tag-select');
+  if (!sel) return;
+  const valorAtual = sel.value;
+  sel.innerHTML = '<option value="">Todas as tags</option>' +
+    DB.tags.map(t => '<option value="'+t.nome+'"'+(t.nome===valorAtual?' selected':'')+'>'+t.nome+'</option>').join('');
+}
+
+function mudarMesDashboard(mes) {
+  mesAtual = mes;
+  renderDashboard();
+}
+
+function navegarMes(dir) {
+  const [y, m] = mesAtual.split('-').map(Number);
+  const d = new Date(y, m - 1 + dir, 1);
+  mesAtual = d.toISOString().slice(0, 7);
+  preencherSeletorMesDashboard();
+  renderDashboard();
+}
+
 function renderDashboard() {
+  preencherSeletorMesDashboard();
+  preencherSeletorTagDashboard();
+
   const lancsMes = getMes(mesAtual);
   const receitas = lancsMes.filter(l => l.tipo === 'receita').reduce((a, b) => a + b.valor, 0);
   const despesas = lancsMes.filter(l => l.tipo === 'despesa').reduce((a, b) => a + b.valor, 0);
@@ -200,17 +268,16 @@ function renderDashboard() {
   setDelta('d-sobra', sobra, recAnt - despAnt);
   setDelta('d-patrimonio', pat, patAnt);
 
-  // Filtro por tag no card de categorias
-  const dashTag = (document.getElementById('dash-filtro-tag')?.value || '').trim().toLowerCase();
+  // Filtro por tag via select
+  const dashTag = (document.getElementById('dash-filtro-tag-select')?.value || '').trim().toLowerCase();
   const lancsFiltrados = dashTag
-    ? lancsMes.filter(l => (l.tags || []).some(t => t.toLowerCase().includes(dashTag)))
+    ? lancsMes.filter(l => (l.tags || []).some(t => t.toLowerCase() === dashTag))
     : lancsMes;
 
-  // Subtítulo dinâmico
   const subEl = document.getElementById('dash-tag-sub');
   if (subEl) subEl.textContent = dashTag ? 'Tag: ' + dashTag : 'vs orçamento';
 
-  // Categorias
+  // Gastos por categoria
   const porCat = {};
   lancsFiltrados.filter(l => l.tipo === 'despesa').forEach(l => {
     porCat[l.categoria] = (porCat[l.categoria] || 0) + l.valor;
@@ -218,7 +285,7 @@ function renderDashboard() {
   const maxVal = Math.max(...Object.values(porCat), 1);
   const listaCats = document.getElementById('lista-categorias');
   listaCats.innerHTML = '';
-  Object.entries(porCat).sort((a, b) => b[1] - a[1]).slice(0, 7).forEach(([cat, val]) => {
+  Object.entries(porCat).sort((a, b) => b[1] - a[1]).slice(0, 8).forEach(([cat, val]) => {
     const orc = DB.orcamentos[cat] || 0;
     const pct = orc > 0 ? Math.min(Math.round((val / orc) * 100), 100) : Math.round((val / maxVal) * 100);
     const corBarra = orc > 0 && val > orc ? '#ef4444' : getCor(cat);
@@ -230,7 +297,7 @@ function renderDashboard() {
       '</div>';
   });
   if (!Object.keys(porCat).length) {
-    listaCats.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:8px 0">Nenhum gasto lançado este mês</div>';
+    listaCats.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:16px 0;text-align:center">Nenhuma despesa' + (dashTag ? ' com a tag "' + dashTag + '"' : '') + ' em ' + mesAtual + '</div>';
   }
 
   // Últimos lançamentos
@@ -418,7 +485,7 @@ function salvarEdicao() {
   l.subcategoria = document.getElementById('editar-subcategoria').value;
   l.tags = getTagsSelecionadas('editar-tags-seletor');
   l.status = 'validado';
-  if (l.categoria !== catAntiga) verificarESalvarRegra(l.descricao, l.categoria, catAntiga);
+  if (l.categoria !== catAntiga) verificarESalvarRegra(l.descricao, l);
   salvarDB(); fecharModal('modal-editar'); renderLancamentos(); renderDashboard();
   toast('Lançamento atualizado!');
 }
@@ -468,10 +535,7 @@ function confirmarValidacao() {
   l.tags = getTagsSelecionadas('validar-tags-seletor');
   l.status = 'validado';
   salvarDB();
-  // Pergunta se quer criar regra para essa classificação
-  if (l.categoria !== catAntiga) {
-    verificarESalvarRegra(l.descricao, l.categoria, catAntiga);
-  }
+  if (l.categoria !== catAntiga) verificarESalvarRegra(l.descricao, l);
   fecharModal('modal-validar'); renderLancamentos(); renderDashboard(); atualizarBannerValidacao();
   toast('Lançamento validado!');
 }
@@ -553,11 +617,10 @@ function processarCSV_XP(linhas) {
     let valorStr = cols[3].replace(/R\$\s?/g, '').replace(/\./g, '').replace(',', '.').trim();
     let valor = parseFloat(valorStr);
     if (isNaN(valor)) continue;
-    const isPagamento = descricao.toLowerCase().includes('pagamento');
-    const isProprioNome = nomeProprioRegex.test(descricao);
-    const tipo = (isPagamento || isProprioNome) ? 'interno' : 'despesa';
+    const isPagamento = descricao.toLowerCase().includes('pagamento fatura') || descricao.toLowerCase().includes('transferencia entre contas');
+    const tipo = isPagamento ? 'interno' : (valor < 0 ? 'despesa' : 'receita');
     const descFinal = parcela && parcela !== '-' ? descricao + ' (' + parcela + ')' : descricao;
-    lancamentos.push({ data, descricao: descFinal, valor: Math.abs(valor), tipo, categoria: (isPagamento||isProprioNome)?'outros':classificarCategoria(descricao), subcategoria:'', tags:[], status:'pendente', id:gerarId(), origem:'XP' });
+    lancamentos.push({ data, descricao: descFinal, valor: Math.abs(valor), tipo, categoria: isPagamento?'outros':classificarCategoria(descricao), subcategoria:'', tags:[], status:'pendente', id:gerarId(), origem:'XP' });
   }
   mostrarPreview(lancamentos);
 }
@@ -581,12 +644,12 @@ function processarCSV_Inter(linhas) {
     const isAplicacao = historico.includes('aplica');
     const isResgate = historico.includes('resgate');
     const isPixDevolvido = historico.includes('devolvido');
-    const isProprioNome = nomeProprioRegex.test(descricao);
+    const isTransferenciaExplicita = historico.includes('transferencia entre contas') || historico.includes('transf entre contas');
     const isRecebido = historico.includes('recebido') && !isPixDevolvido;
     let tipo;
-    if (isAplicacao || isResgate || isPixDevolvido || isProprioNome) tipo = 'interno';
-    else if (isRecebido) tipo = 'receita';
-    else tipo = valor < 0 ? 'despesa' : 'receita';
+    if (isAplicacao || isResgate || isPixDevolvido || isTransferenciaExplicita) tipo = 'interno';
+    else if (isRecebido || valor > 0) tipo = 'receita';
+    else tipo = 'despesa';
     lancamentos.push({ data, descricao: descricao||historico, valor:Math.abs(valor), tipo, categoria: tipo==='interno'?'outros':classificarCategoria(descricao+' '+historico), subcategoria:'', tags:[], status:'pendente', id:gerarId(), origem:'Inter' });
   }
   mostrarPreview(lancamentos);
@@ -617,9 +680,17 @@ function classificarTipo(descricao, valor) {
   return 'receita';
 }
 
+function aplicarRegra(descricao) {
+  // Retorna objeto completo da regra se encontrar match
+  const desc = descricao.toLowerCase();
+  const regra = DB.regras.find(r => desc.includes(r.chave.toLowerCase()));
+  if (regra) return regra;
+  return null;
+}
+
 function classificarCategoria(descricao) {
   // 1. Verifica regras personalizadas primeiro
-  const regra = DB.regras.find(r => descricao.toLowerCase().includes(r.chave.toLowerCase()));
+  const regra = aplicarRegra(descricao);
   if (regra) return regra.categoria;
 
   // 2. Classificação automática com novos IDs
@@ -648,22 +719,32 @@ function classificarCategoria(descricao) {
 // ========================
 // REGRAS DE CLASSIFICAÇÃO
 // ========================
-function verificarESalvarRegra(descricao, categoriaNova, categoriaAntiga) {
-  if (categoriaNova === categoriaAntiga) return;
-  const chave = descricao.trim();
+function verificarESalvarRegra(descricao, lançamento) {
+  // Recebe o lançamento completo para salvar regra com todos os campos
+  const chave = descricao.trim().toLowerCase().slice(0, 40); // Usa primeiros 40 chars como chave
   if (chave.length < 3) return;
-  const jaExiste = DB.regras.find(r => r.chave.toLowerCase() === chave.toLowerCase());
+  const jaExiste = DB.regras.find(r => r.chave.toLowerCase() === chave);
   if (jaExiste) {
-    jaExiste.categoria = categoriaNova;
+    // Atualiza regra existente com os dados mais recentes
+    jaExiste.tipo = lançamento.tipo;
+    jaExiste.categoria = lançamento.categoria;
+    jaExiste.subcategoria = lançamento.subcategoria || '';
+    jaExiste.tags = lançamento.tags || [];
     salvarDB();
+    toast('Regra atualizada para "' + chave + '"');
     return;
   }
-  // Pergunta se quer criar regra
-  if (confirm('Sempre classificar "' + chave + '" como ' + getNomeCat(categoriaNova) + '?')) {
-    DB.regras.push({ id: gerarId(), chave, categoria: categoriaNova });
-    salvarDB();
-    toast('Regra salva! Próximas importações serão classificadas automaticamente.');
-  }
+  // Cria regra nova automaticamente
+  DB.regras.push({
+    id: gerarId(),
+    chave,
+    tipo: lançamento.tipo,
+    categoria: lançamento.categoria,
+    subcategoria: lançamento.subcategoria || '',
+    tags: lançamento.tags || []
+  });
+  salvarDB();
+  toast('✓ Regra criada — próxima importação será automática');
 }
 
 function renderRegras() {
@@ -671,13 +752,18 @@ function renderRegras() {
   if (!lista) return;
   lista.innerHTML = '';
   if (!DB.regras.length) {
-    lista.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:16px 0">Nenhuma regra cadastrada ainda.<br>As regras são criadas automaticamente quando você corrige uma classificação.</div>';
+    lista.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:16px 0">Nenhuma regra ainda.<br>Categorize um lançamento e o sistema cria a regra automaticamente.</div>';
     return;
   }
   DB.regras.forEach(r => {
+    const subcatLabel = r.subcategoria ? ' › ' + r.subcategoria : '';
+    const tagsLabel = r.tags && r.tags.length ? '<span style="font-size:10px;color:var(--text3)"> · ' + r.tags.join(', ') + '</span>' : '';
+    const tipoLabel = r.tipo ? '<span style="font-size:10px;padding:1px 6px;border-radius:99px;background:var(--bg);color:var(--text2);margin-left:4px">' + r.tipo + '</span>' : '';
     lista.innerHTML += '<div style="display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:0.5px solid var(--border-light2)">' +
-      '<div style="flex:1"><div style="font-size:13px;font-weight:500">' + r.chave + '</div>' +
-      '<div style="font-size:11px;color:var(--text2)">→ ' + getNomeCat(r.categoria) + '</div></div>' +
+      '<div style="flex:1">' +
+        '<div style="font-size:13px;font-weight:500">' + r.chave + tipoLabel + '</div>' +
+        '<div style="font-size:11px;color:var(--text2)">→ ' + getNomeCat(r.categoria) + subcatLabel + tagsLabel + '</div>' +
+      '</div>' +
       '<button class="btn" style="font-size:11px;padding:3px 8px;color:var(--red)" onclick="excluirRegra(\'' + r.id + '\')"><i class="ti ti-trash"></i></button>' +
       '</div>';
   });
@@ -770,50 +856,90 @@ function getTagsSelecionadas(containerId) {
 
 function mostrarPreview(lancamentos) {
   if (!lancamentos.length) { toast('Nenhum lançamento encontrado no arquivo'); return; }
+
+  // Aplica regras completas antes de mostrar
+  lancamentos.forEach(l => {
+    const regra = aplicarRegra(l.descricao);
+    if (regra) {
+      if (regra.tipo) l.tipo = regra.tipo;
+      if (regra.categoria) l.categoria = regra.categoria;
+      if (regra.subcategoria) l.subcategoria = regra.subcategoria;
+      if (regra.tags && regra.tags.length) l.tags = regra.tags;
+      l.status = 'validado';
+    }
+  });
+
   const tbody = document.getElementById('tbody-preview');
   tbody.innerHTML = '';
   lancamentos.forEach((l, i) => {
     const isInterno = l.tipo === 'interno';
     const amtClass = isInterno ? 'neu' : l.tipo === 'receita' ? 'pos' : 'neg';
     const amtPrefix = isInterno ? '' : l.tipo === 'receita' ? '+' : '-';
-    const catOpts = DB.categorias.map(c => '<option value="'+c.id+'"'+(c.id===l.categoria?' selected':'')+'>'+c.nome+'</option>').join('');
+    const temRegra = l.status === 'validado';
+    const rowStyle = !l.categoria || l.categoria === 'outros' ? 'background:#fff7ed' : (temRegra ? 'background:#f0fdf4' : '');
+    const regraTag = temRegra ? '<span style="font-size:10px;padding:1px 5px;border-radius:99px;background:#dcfce7;color:#166534;margin-left:4px">✓</span>' : '';
+
+    const catsFiltradas = DB.categorias.filter(c => getCategoriasPorTipo(l.tipo).includes(c.id));
+    const catOpts = '<option value="">— categoria —</option>' + catsFiltradas.map(c => '<option value="'+c.id+'"'+(c.id===l.categoria?' selected':'')+'>'+c.nome+'</option>').join('');
     const subcats = getSubcats(l.categoria);
     const subcatOpts = '<option value="">—</option>' + subcats.map(s => '<option value="'+s+'"'+(s===l.subcategoria?' selected':'')+'>'+s+'</option>').join('');
-    tbody.innerHTML += '<tr id="preview-row-'+i+'">' +
-      '<td style="white-space:nowrap">'+formatarData(l.data)+'</td>' +
-      '<td><input type="text" value="'+l.descricao.replace(/"/g,'&quot;')+'" style="width:100%;min-width:140px;padding:4px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:12px" onchange="previewLancs['+i+'].descricao=this.value"></td>' +
-      '<td style="min-width:160px">' +
-        '<select style="width:100%;padding:4px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:12px;margin-bottom:3px" onchange="previewLancs['+i+'].categoria=this.value;atualizarSubcatPreview('+i+',this.value)">'+catOpts+'</select>' +
-        '<select id="subcat-preview-'+i+'" style="width:100%;padding:4px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:11px;color:var(--text2)" onchange="previewLancs['+i+'].subcategoria=this.value">'+subcatOpts+'</select>' +
-      '</td>' +
-      '<td style="min-width:120px" id="preview-tags-cell-'+i+'">' +
-        (DB.tags.length
-          ? DB.tags.map(tag =>
-              '<label style="display:inline-flex;align-items:center;gap:4px;margin:2px 3px 2px 0;cursor:pointer;padding:2px 7px;border-radius:99px;border:0.5px solid var(--border-light);font-size:11px">' +
-                '<input type="checkbox" value="'+tag.nome+'" '+((l.tags||[]).includes(tag.nome)?'checked':'')+' style="display:none" onchange="atualizarTagsPreview('+i+')">' +
-                '<span style="width:6px;height:6px;border-radius:50%;background:'+tag.cor+'"></span>' +
-                '<span style="color:var(--text2)">'+tag.nome+'</span>' +
-              '</label>'
-            ).join('')
-          : '<span style="font-size:11px;color:var(--text3)">Sem tags</span>'
-        ) +
-      '</td>' +
-      '<td><select style="padding:4px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:12px" onchange="previewLancs['+i+'].tipo=this.value">' +
+
+    const tagsHtml = DB.tags.length
+      ? DB.tags.map(tag =>
+          '<label style="display:inline-flex;align-items:center;gap:3px;margin:1px 2px;cursor:pointer;padding:2px 6px;border-radius:99px;border:0.5px solid '+((l.tags||[]).includes(tag.nome)?tag.cor:'var(--border-light)')+';background:'+((l.tags||[]).includes(tag.nome)?tag.cor+'22':'transparent')+';font-size:11px;white-space:nowrap">' +
+            '<input type="checkbox" value="'+tag.nome+'" '+((l.tags||[]).includes(tag.nome)?'checked':'')+' style="display:none" onchange="atualizarTagsPreview('+i+')">' +
+            '<span style="width:5px;height:5px;border-radius:50%;background:'+tag.cor+'"></span>' +
+            '<span style="color:'+((l.tags||[]).includes(tag.nome)?tag.cor:'var(--text2)')+'">'+tag.nome+'</span>' +
+          '</label>'
+        ).join('')
+      : '<span style="font-size:11px;color:var(--text3)">—</span>';
+
+    tbody.innerHTML += '<tr id="preview-row-'+i+'" style="'+rowStyle+'">' +
+      // Checkbox seleção
+      '<td style="width:32px;text-align:center"><input type="checkbox" class="preview-check" data-idx="'+i+'" style="width:14px;height:14px;cursor:pointer"></td>' +
+      // Data
+      '<td style="white-space:nowrap;font-size:12px">'+formatarData(l.data)+'</td>' +
+      // Tipo
+      '<td><select style="padding:3px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:12px;min-width:90px" onchange="previewLancs['+i+'].tipo=this.value;atualizarCatsFiltroPreview('+i+',this.value)">' +
         '<option value="despesa"'+(l.tipo==='despesa'?' selected':'')+'>Despesa</option>' +
         '<option value="receita"'+(l.tipo==='receita'?' selected':'')+'>Receita</option>' +
         '<option value="interno"'+(l.tipo==='interno'?' selected':'')+'>Interno</option>' +
       '</select></td>' +
-      '<td class="tx-amount '+amtClass+'" style="white-space:nowrap">'+amtPrefix+' '+fmt(l.valor)+'</td>' +
+      // Descrição
+      '<td><div style="display:flex;align-items:center;gap:4px">' +
+        '<input type="text" value="'+l.descricao.replace(/"/g,'&quot;')+'" style="width:100%;min-width:130px;padding:3px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:12px" onchange="previewLancs['+i+'].descricao=this.value">' +
+        regraTag +
+      '</div></td>' +
+      // Categoria
+      '<td style="min-width:140px">' +
+        '<select style="width:100%;padding:3px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:12px'+((!l.categoria||l.categoria==='outros')&&!temRegra?';border-color:#f59e0b':'')+'" onchange="previewLancs['+i+'].categoria=this.value;atualizarSubcatPreview('+i+',this.value)">'+catOpts+'</select>' +
+      '</td>' +
+      // Subcategoria
+      '<td style="min-width:110px">' +
+        '<select id="subcat-preview-'+i+'" style="width:100%;padding:3px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:11px;color:var(--text2)" onchange="previewLancs['+i+'].subcategoria=this.value">'+subcatOpts+'</select>' +
+      '</td>' +
+      // Tags
+      '<td style="min-width:100px" id="preview-tags-cell-'+i+'">' + tagsHtml + '</td>' +
+      // Valor
+      '<td class="tx-amount '+amtClass+'" style="white-space:nowrap;font-size:13px">'+amtPrefix+' '+fmt(l.valor)+'</td>' +
+      // Botões
       '<td style="white-space:nowrap">' +
-        '<button class="btn" style="font-size:11px;padding:3px 8px;color:var(--text2)" title="Ignorar" onclick="ignorarPreview('+i+')"><i class="ti ti-eye-off"></i></button> ' +
-        '<button class="btn" style="font-size:11px;padding:3px 8px;color:var(--red)" title="Excluir" onclick="removerPreview('+i+')"><i class="ti ti-trash"></i></button>' +
+        '<button class="btn" style="font-size:11px;padding:3px 7px;color:var(--red)" title="Excluir" onclick="removerPreview('+i+')"><i class="ti ti-trash"></i></button>' +
       '</td></tr>';
   });
+
   window.previewLancs = lancamentos;
   document.getElementById('preview-importacao').style.display = 'block';
+  // Garante aba preview ativa
+  switchTabImport('preview', document.querySelector('#preview-importacao .tab'));
+  // Reset select-all
+  const sa = document.getElementById('select-all-preview');
+  if (sa) sa.checked = false;
+
   const total = lancamentos.length;
-  const internos = lancamentos.filter(l => l.tipo === 'interno').length;
-  toast(total + ' lançamentos — ' + (total-internos) + ' para validar, ' + internos + ' internos');
+  const auto = lancamentos.filter(l => l.status === 'validado').length;
+  const semCat = lancamentos.filter(l => !l.categoria || l.categoria === 'outros').length;
+  toast(total + ' lançamentos' + (auto ? ' — ' + auto + ' automáticos' : '') + (semCat ? ' — ' + semCat + ' sem categoria' : ''));
 }
 
 function atualizarSubcatPreview(i, catId) {
@@ -822,6 +948,19 @@ function atualizarSubcatPreview(i, catId) {
   if (!sel) return;
   sel.innerHTML = '<option value="">—</option>' + subcats.map(s => '<option value="'+s+'">'+s+'</option>').join('');
   previewLancs[i].subcategoria = '';
+}
+
+function atualizarCatsFiltroPreview(i, tipo) {
+  // Quando tipo muda no preview, atualiza select de categoria filtrando pelo tipo
+  const row = document.getElementById('preview-row-' + i);
+  if (!row) return;
+  const catSelect = row.querySelector('td:nth-child(3) select:first-child');
+  if (!catSelect) return;
+  const catsFiltradas = DB.categorias.filter(c => getCategoriasPorTipo(tipo).includes(c.id));
+  catSelect.innerHTML = '<option value="">— selecione —</option>' + catsFiltradas.map(c => '<option value="'+c.id+'">'+c.nome+'</option>').join('');
+  previewLancs[i].categoria = '';
+  previewLancs[i].subcategoria = '';
+  atualizarSubcatPreview(i, '');
 }
 
 function atualizarTagsPreview(i) {
@@ -842,17 +981,131 @@ function atualizarTagsPreview(i) {
   });
 }
 
-function ignorarPreview(i) { window.previewLancs.splice(i,1); mostrarPreview(window.previewLancs); toast('Ignorado'); }
-function removerPreview(i) { window.previewLancs.splice(i,1); mostrarPreview(window.previewLancs); }
+function ignorarPreview(i) {
+  const l = window.previewLancs[i];
+  if (!DB.ignorados) DB.ignorados = [];
+  DB.ignorados.push({ ...l, ignoradoEm: new Date().toISOString() });
+  window.previewLancs.splice(i, 1);
+  salvarDB();
+  atualizarBadgeIgnorados();
+  if (window.previewLancs.length) mostrarPreview(window.previewLancs);
+  else { document.getElementById('preview-importacao').style.display = 'none'; toast('Todos ignorados'); }
+}
+
+function removerPreview(i) {
+  window.previewLancs.splice(i, 1);
+  if (window.previewLancs.length) mostrarPreview(window.previewLancs);
+  else document.getElementById('preview-importacao').style.display = 'none';
+}
+
+function selecionarTodosPreview(checked) {
+  document.querySelectorAll('.preview-check').forEach(cb => cb.checked = checked);
+}
+
+function ignorarSelecionados() {
+  const selecionados = [...document.querySelectorAll('.preview-check:checked')].map(cb => parseInt(cb.dataset.idx));
+  if (!selecionados.length) { toast('Nenhum lançamento selecionado'); return; }
+  if (!DB.ignorados) DB.ignorados = [];
+  // Remove de trás pra frente para não bagunçar índices
+  const indices = selecionados.sort((a,b) => b - a);
+  indices.forEach(i => {
+    const l = window.previewLancs[i];
+    DB.ignorados.push({ ...l, ignoradoEm: new Date().toISOString() });
+    window.previewLancs.splice(i, 1);
+  });
+  salvarDB();
+  atualizarBadgeIgnorados();
+  toast(selecionados.length + ' lançamento(s) ignorado(s)');
+  if (window.previewLancs.length) mostrarPreview(window.previewLancs);
+  else document.getElementById('preview-importacao').style.display = 'none';
+}
+
+function atualizarBadgeIgnorados() {
+  const badge = document.getElementById('badge-ignorados');
+  if (!badge) return;
+  const total = (DB.ignorados || []).length;
+  badge.textContent = total;
+  badge.style.display = total ? 'inline' : 'none';
+}
+
+function switchTabImport(tab, el) {
+  if (!el) return;
+  document.querySelectorAll('#preview-importacao .tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('import-tab-preview').style.display = tab === 'preview' ? 'block' : 'none';
+  document.getElementById('import-tab-ignorados').style.display = tab === 'ignorados' ? 'block' : 'none';
+  if (tab === 'ignorados') renderIgnorados();
+}
+
+function renderIgnorados() {
+  const lista = document.getElementById('lista-ignorados');
+  if (!lista) return;
+  const ignorados = DB.ignorados || [];
+  if (!ignorados.length) {
+    lista.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:16px">Nenhum lançamento ignorado.</div>';
+    return;
+  }
+  lista.innerHTML = '<table class="tx-table"><thead><tr><th>Data</th><th>Descrição</th><th>Valor</th><th>Ignorado em</th><th></th></tr></thead><tbody>' +
+    ignorados.map((l, i) =>
+      '<tr>' +
+        '<td style="font-size:12px">' + formatarData(l.data) + '</td>' +
+        '<td style="font-size:12px">' + l.descricao + '</td>' +
+        '<td class="tx-amount ' + (l.tipo === 'receita' ? 'pos' : 'neg') + '" style="font-size:12px">' + fmt(l.valor) + '</td>' +
+        '<td style="font-size:11px;color:var(--text3)">' + new Date(l.ignoradoEm).toLocaleDateString('pt-BR') + '</td>' +
+        '<td><button class="btn" style="font-size:11px;padding:3px 8px" onclick="restaurarIgnorado(' + i + ')"><i class="ti ti-refresh"></i> Restaurar</button></td>' +
+      '</tr>'
+    ).join('') +
+    '</tbody></table>';
+}
+
+function restaurarIgnorado(i) {
+  const l = DB.ignorados.splice(i, 1)[0];
+  delete l.ignoradoEm;
+  if (!window.previewLancs) window.previewLancs = [];
+  window.previewLancs.push(l);
+  salvarDB();
+  atualizarBadgeIgnorados();
+  renderIgnorados();
+  document.getElementById('preview-importacao').style.display = 'block';
+  toast('Lançamento restaurado para o preview');
+}
+
+function limparIgnorados() {
+  if (!confirm('Limpar todos os lançamentos ignorados? Ação irreversível.')) return;
+  DB.ignorados = [];
+  salvarDB();
+  atualizarBadgeIgnorados();
+  renderIgnorados();
+  toast('Lista de ignorados limpa');
+}
 
 function salvarImportacao() {
   if (!window.previewLancs || !window.previewLancs.length) return;
+
+  // Bloqueia se houver lançamentos sem categoria (exceto internos)
+  const semCategoria = window.previewLancs.filter(l => l.tipo !== 'interno' && (!l.categoria || l.categoria === 'outros' || l.categoria === ''));
+  if (semCategoria.length) {
+    toast('⚠️ ' + semCategoria.length + ' lançamento(s) sem categoria. Classifique antes de salvar.');
+    // Destaca linhas sem categoria
+    window.previewLancs.forEach((l, i) => {
+      const row = document.getElementById('preview-row-' + i);
+      if (!row) return;
+      if (l.tipo !== 'interno' && (!l.categoria || l.categoria === 'outros' || l.categoria === '')) {
+        row.style.background = '#fef2f2';
+        row.style.outline = '1px solid #fca5a5';
+      }
+    });
+    return;
+  }
+
   DB.lancamentos.push(...window.previewLancs);
   salvarDB();
   document.getElementById('preview-importacao').style.display = 'none';
+  const total = window.previewLancs.length;
+  const autoClassificados = window.previewLancs.filter(l => l.status === 'validado').length;
   window.previewLancs = [];
   atualizarBannerValidacao(); renderDashboard();
-  toast('Lançamentos importados com sucesso!');
+  toast(total + ' lançamentos salvos — ' + autoClassificados + ' já validados automaticamente');
 }
 
 function salvarManual(e) {
