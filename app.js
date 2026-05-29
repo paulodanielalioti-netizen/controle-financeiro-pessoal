@@ -85,7 +85,47 @@ function carregarDB() {
           return { ...pc, subcats: pc.subcats || (def ? def.subcats : []) };
         });
       }
-      // Migração automática de IDs antigos
+      // Migração v3 — força atualização do plano de contas para versão completa com receitas
+      if (!parsed.migradoV3) {
+        const planoNovo = [
+          { id: 'rec_trabalho',      nome: 'Trabalho Fixo',           cor: '#16a34a', codigo: '1.1', subcats: ['Salário Mar&Rio','Comissões'] },
+          { id: 'rec_servicos',      nome: 'Prestação de Serviços',   cor: '#15803d', codigo: '1.2', subcats: ['Clínica de Fisioterapia','BPO Financeiro','Consultoria Contábil','Outros'] },
+          { id: 'rec_projeto_ia',    nome: 'Projeto IA / Automação',  cor: '#166534', codigo: '1.3', subcats: ['Receita Operacional','Participação Societária'] },
+          { id: 'rec_investimentos', nome: 'Rendimentos',             cor: '#14532d', codigo: '1.4', subcats: ['Dividendos','Juros / Renda Fixa','CDB / LCI / LCA','Outros'] },
+          { id: 'rec_eventual',      nome: 'Eventual',                cor: '#4ade80', codigo: '1.5', subcats: ['Venda de Bens','Outros'] },
+          { id: 'moradia',           nome: 'Moradia',                 cor: '#84cc16', codigo: '2.1', subcats: ['Aluguel','Condomínio','Internet','Água (Semae)','Energia Elétrica','Gás','Outros'] },
+          { id: 'transp_fixo',       nome: 'Transporte Fixo',         cor: '#65a30d', codigo: '2.2', subcats: ['IPVA / Licenciamento','Seguro do Veículo','Financiamento Veículo'] },
+          { id: 'assinaturas',       nome: 'Assinaturas',             cor: '#6366f1', codigo: '2.3', subcats: ['Telefone','Streaming','Google','Apps','Outros'] },
+          { id: 'faculdade',         nome: 'Faculdade',               cor: '#8b5cf6', codigo: '2.4', subcats: ['Mensalidade Estácio','Material'] },
+          { id: 'igreja',            nome: 'Igreja',                  cor: '#ec4899', codigo: '2.5', subcats: ['Dízimo','Oferta','Eventos'] },
+          { id: 'alimentacao',       nome: 'Alimentação',             cor: '#f59e0b', codigo: '3.1', subcats: ['Mercado','Delivery','Restaurante','Outros'] },
+          { id: 'transp_variavel',   nome: 'Transporte Variável',     cor: '#d97706', codigo: '3.2', subcats: ['Combustível Carro','Combustível Moto','Manutenção Carro','Manutenção Moto','Pneus','Uber','Estacionamento','Multa'] },
+          { id: 'saude_corpo',       nome: 'Saúde & Corpo',           cor: '#2dd4bf', codigo: '3.3', subcats: ['Academia','Muay thai','Suplemento','Convênio','Nutricionista','Psicólogo','Quiropraxia','Remédio','Equipamentos','Outros'] },
+          { id: 'cuidado_pessoal',   nome: 'Cuidado Pessoal',         cor: '#f43f5e', codigo: '3.4', subcats: ['Barbearia','Cosméticos','Outros'] },
+          { id: 'formacao',          nome: 'Formação',                cor: '#a855f7', codigo: '3.5', subcats: ['Cursos','Livros','Mentoria','Outros'] },
+          { id: 'lazer',             nome: 'Lazer',                   cor: '#14b8a6', codigo: '3.6', subcats: ['Cinema','Rolê / Social','Viagem','Entretenimento','Conferências','Outros'] },
+          { id: 'compras',           nome: 'Compras',                 cor: '#fb923c', codigo: '4.1', subcats: ['Vestuário','Eletrônico','Eletrodoméstico','Móvel','Utilitários','Outros'] },
+          { id: 'presentes',         nome: 'Presentes & Datas',       cor: '#f87171', codigo: '4.2', subcats: ['Aniversário','Celebrações','Outros'] },
+          { id: 'inv_renda_fixa',    nome: 'Renda Fixa',              cor: '#0d9488', codigo: '5.1', subcats: ['CDB','LCI / LCA','Tesouro Direto'] },
+          { id: 'inv_renda_var',     nome: 'Renda Variável',          cor: '#0f766e', codigo: '5.2', subcats: ['Ações','FIIs','ETFs','BDRs'] },
+          { id: 'inv_reservas',      nome: 'Reservas',                cor: '#115e59', codigo: '5.3', subcats: ['Reserva de Emergência','Reserva de Oportunidade'] },
+          { id: 'inv_negocio',       nome: 'Negócio',                 cor: '#134e4a', codigo: '5.4', subcats: ['Aporte Projeto IA','Ferramentas / Infraestrutura'] },
+          { id: 'inv_objetivos',     nome: 'Objetivos Futuros',       cor: '#4f9cf9', codigo: '5.5', subcats: ['Poupança Casamento','Fundo Imóvel'] },
+          { id: 'outros',            nome: 'Outros',                  cor: '#94a3b8', codigo: '9.9', subcats: [] },
+        ];
+        // Preserva subcats customizadas que o usuário possa ter adicionado
+        DB.categorias = planoNovo.map(nova => {
+          const antiga = DB.categorias.find(c => c.id === nova.id);
+          if (antiga && antiga.subcats && antiga.subcats.length > nova.subcats.length) {
+            return { ...nova, subcats: antiga.subcats };
+          }
+          return nova;
+        });
+        DB.migradoV3 = true;
+        salvarDB();
+        console.log('Migração v3 — plano de contas atualizado');
+      }
+      // Migração v2 — IDs antigos de categoria
       if (!parsed.migradoV2) {
         const mapa = {
           'academia': 'saude_corpo', 'esporte': 'saude_corpo', 'saude': 'saude_corpo',
@@ -101,11 +141,9 @@ function carregarDB() {
         DB.regras.forEach(r => {
           if (mapa[r.categoria]) { r.categoria = mapa[r.categoria]; migrou = true; }
         });
-        // Renomear subcategoria Unicesumar → Faculdade
         DB.lancamentos.forEach(l => {
           if (l.subcategoria === 'Unicesumar') { l.subcategoria = 'Faculdade'; migrou = true; }
         });
-        // Atualiza subcat no plano de contas
         const catFaculdade = DB.categorias.find(c => c.id === 'faculdade');
         if (catFaculdade && catFaculdade.subcats) {
           const idx = catFaculdade.subcats.indexOf('Unicesumar');
