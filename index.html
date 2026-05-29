@@ -49,6 +49,21 @@
 
       <!-- DASHBOARD -->
       <div id="page-dashboard" class="page active">
+        <!-- Controles do Dashboard -->
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:6px">
+            <button class="btn" style="padding:6px 10px" onclick="navegarMes(-1)"><i class="ti ti-chevron-left"></i></button>
+            <select id="dash-mes-select" onchange="mudarMesDashboard(this.value)" style="padding:6px 12px;border-radius:8px;border:0.5px solid var(--border-light);font-size:13px;font-family:inherit;background:var(--card);color:var(--text);min-width:150px"></select>
+            <button class="btn" style="padding:6px 10px" onclick="navegarMes(1)"><i class="ti ti-chevron-right"></i></button>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;margin-left:auto">
+            <span style="font-size:12px;color:var(--text2)"><i class="ti ti-tag"></i></span>
+            <select id="dash-filtro-tag-select" onchange="renderDashboard()" style="padding:6px 12px;border-radius:8px;border:0.5px solid var(--border-light);font-size:12px;font-family:inherit;background:var(--card);color:var(--text);min-width:140px">
+              <option value="">Todas as tags</option>
+            </select>
+            <button class="btn" style="font-size:11px;padding:5px 8px;color:var(--text3)" onclick="document.getElementById('dash-filtro-tag-select').value='';renderDashboard()" title="Limpar filtro"><i class="ti ti-x"></i></button>
+          </div>
+        </div>
         <div class="alert-banner" id="banner-validacao" style="display:none">
           <div>
             <div class="banner-title" id="banner-count">0 lançamentos aguardando validação</div>
@@ -66,10 +81,6 @@
           <div class="card">
             <div class="card-header">
               <div><div class="card-title">Gastos por categoria</div><div class="card-sub" id="dash-tag-sub">vs orçamento</div></div>
-              <div style="display:flex;align-items:center;gap:6px">
-                <input type="text" id="dash-filtro-tag" placeholder="🏷 filtrar por tag..." style="padding:5px 10px;border-radius:8px;border:0.5px solid var(--border-light);font-size:12px;font-family:inherit;width:160px" oninput="renderDashboard()">
-                <button class="btn" style="font-size:11px;padding:4px 8px;color:var(--text3)" onclick="document.getElementById('dash-filtro-tag').value='';renderDashboard()" title="Limpar filtro"><i class="ti ti-x"></i></button>
-              </div>
             </div>
             <div id="lista-categorias" class="category-list"></div>
           </div>
@@ -151,14 +162,45 @@
           </div>
         </div>
         <div id="preview-importacao" class="card" style="display:none;margin-top:16px">
-          <div class="card-header">
-            <div class="card-title">Preview — valide antes de salvar</div>
-            <button class="btn btn-dark" onclick="salvarImportacao()">Salvar todos</button>
+          <div class="import-tabs" style="margin-bottom:0;border-bottom:0.5px solid var(--border-light);padding-bottom:0">
+            <button class="tab active" onclick="switchTabImport('preview',this)">Preview</button>
+            <button class="tab" onclick="switchTabImport('ignorados',this)">Ignorados <span id="badge-ignorados" style="display:none;font-size:10px;padding:1px 6px;border-radius:99px;background:#f1f5f9;color:var(--text2);margin-left:4px">0</span></button>
           </div>
-          <table class="tx-table">
-            <thead><tr><th>Data</th><th>Descrição</th><th>Categoria / Subcategoria</th><th>Tags</th><th>Tipo</th><th>Valor</th><th></th></tr></thead>
-            <tbody id="tbody-preview"></tbody>
-          </table>
+          <div id="import-tab-preview" style="margin-top:0">
+            <div class="card-header" style="padding-top:14px">
+              <div style="display:flex;align-items:center;gap:10px">
+                <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer">
+                  <input type="checkbox" id="select-all-preview" onchange="selecionarTodosPreview(this.checked)" style="width:14px;height:14px">
+                  <span style="color:var(--text2)">Selecionar todos</span>
+                </label>
+                <button class="btn" style="font-size:12px;padding:5px 10px;color:var(--text2)" onclick="ignorarSelecionados()"><i class="ti ti-eye-off"></i> Ignorar selecionados</button>
+              </div>
+              <button class="btn btn-dark" onclick="salvarImportacao()"><i class="ti ti-device-floppy"></i> Salvar todos</button>
+            </div>
+            <div style="overflow-x:auto">
+              <table class="tx-table">
+                <thead><tr>
+                  <th style="width:32px"></th>
+                  <th>Data</th>
+                  <th>Tipo</th>
+                  <th>Descrição</th>
+                  <th>Categoria</th>
+                  <th>Subcategoria</th>
+                  <th>Tags</th>
+                  <th>Valor</th>
+                  <th></th>
+                </tr></thead>
+                <tbody id="tbody-preview"></tbody>
+              </table>
+            </div>
+          </div>
+          <div id="import-tab-ignorados" style="display:none">
+            <div class="card-header" style="padding-top:14px">
+              <div class="card-title">Lançamentos ignorados</div>
+              <button class="btn" style="font-size:12px;color:var(--red)" onclick="limparIgnorados()"><i class="ti ti-trash"></i> Limpar todos</button>
+            </div>
+            <div id="lista-ignorados"></div>
+          </div>
         </div>
       </div>
 
