@@ -40,6 +40,7 @@ let DB = {
   regras: [],
   tags: [],
   ignorados: [],
+  previstos: [],
   config: { nome: 'Paulo Alioti', meta: 1000000 }
 };
 
@@ -78,6 +79,7 @@ function carregarDB() {
       DB.regras = parsed.regras || [];
       DB.tags = parsed.tags || [];
       DB.ignorados = parsed.ignorados || [];
+      DB.previstos = parsed.previstos || [];
       DB.config = { ...DB.config, ...(parsed.config || {}) };
       if (parsed.categorias && parsed.categorias.length) {
         DB.categorias = parsed.categorias.map(pc => {
@@ -169,12 +171,12 @@ function showPage(id) {
     const pg = document.getElementById('page-' + id);
     if (pg) pg.classList.add('active');
 
-    const navMap = { dashboard:0, lancamentos:1, importar:2, dre:3, planocontas:4, patrimonio:5, configuracoes:6 };
+    const navMap = { dashboard:0, lancamentos:1, previsao:2, importar:3, dre:4, planocontas:5, patrimonio:6, configuracoes:7 };
     const items = document.querySelectorAll('.nav-item');
     if (items[navMap[id]]) items[navMap[id]].classList.add('active');
 
     const titles = {
-      dashboard:'Dashboard', lancamentos:'Lançamentos', importar:'Importar',
+      dashboard:'Dashboard', lancamentos:'Lançamentos', previsao:'Previsão', importar:'Importar',
       dre:'DRE', planocontas:'Plano de Contas', patrimonio:'Patrimônio',
       configuracoes:'Configurações'
     };
@@ -183,6 +185,7 @@ function showPage(id) {
 
     if (id === 'dashboard') renderDashboard();
     if (id === 'lancamentos') renderLancamentos();
+    if (id === 'previsao') renderPrevisao();
     if (id === 'dre') { try { preencherDREmeses(); renderDRE(); } catch(e) { console.error('DRE:', e); } }
     if (id === 'planocontas') { renderPlanoContas(); renderRegras(); }
     if (id === 'patrimonio') renderPatrimonio();
@@ -347,6 +350,47 @@ function renderDashboard() {
   }
   ultimos.forEach(l => { listaUltimos.innerHTML += buildTxItem(l); });
 
+  // ===== PROJEÇÃO DO MÊS (previsibilidade) =====
+  const cardProj = document.getElementById('card-projecao');
+  const temPrevisao = (DB.previstos && DB.previstos.length) || Object.keys(DB.orcamentos).length;
+  if (cardProj) {
+    if (temPrevisao && !dashTag) {
+      cardProj.style.display = 'block';
+      const receitaPrev = (DB.previstos || []).filter(p => p.tipo === 'receita').reduce((a, b) => a + b.valor, 0);
+      const despesaPrevLanc = (DB.previstos || []).filter(p => p.tipo === 'despesa').reduce((a, b) => a + b.valor, 0);
+      // Despesa prevista = maior entre previstos recorrentes e soma de orçamentos
+      const despesaPrevOrc = Object.values(DB.orcamentos).reduce((a, b) => a + b, 0);
+      const despesaPrev = Math.max(despesaPrevLanc, despesaPrevOrc);
+
+      document.getElementById('proj-receita-real').textContent = fmt(receitas);
+      document.getElementById('proj-receita-prev').textContent = fmt(receitaPrev);
+      document.getElementById('proj-despesa-real').textContent = fmt(despesas);
+      document.getElementById('proj-despesa-prev').textContent = fmt(despesaPrev);
+
+      const pctRec = receitaPrev > 0 ? Math.min((receitas / receitaPrev) * 100, 100) : 0;
+      const pctDesp = despesaPrev > 0 ? Math.min((despesas / despesaPrev) * 100, 100) : 0;
+      document.getElementById('proj-receita-bar').style.width = pctRec + '%';
+      document.getElementById('proj-despesa-bar').style.width = pctDesp + '%';
+      document.getElementById('proj-despesa-bar').style.background = despesas > despesaPrev && despesaPrev > 0 ? '#b91c1c' : '#dc2626';
+
+      // Projeção: usa o maior entre realizado e previsto para estimar fechamento
+      const receitaProjetada = Math.max(receitas, receitaPrev);
+      const despesaProjetada = Math.max(despesas, despesaPrev);
+      const fechamento = receitaProjetada - despesaProjetada;
+      const elFech = document.getElementById('proj-fechamento');
+      const elStatus = document.getElementById('proj-status');
+      elFech.textContent = fmt(fechamento);
+      elFech.style.color = fechamento >= 0 ? 'var(--green)' : 'var(--red)';
+      if (fechamento >= 0) {
+        elStatus.innerHTML = '<span style="color:var(--green)">✓ No ritmo atual, você fecha com sobra</span>';
+      } else {
+        elStatus.innerHTML = '<span style="color:var(--red)">⚠ No ritmo atual, você fecha no vermelho</span>';
+      }
+    } else {
+      cardProj.style.display = 'none';
+    }
+  }
+
   renderChartPatrimonio();
 }
 
@@ -357,6 +401,7 @@ function buildTxItem(l) {
     : l.status === 'validado'
     ? '<span class="tx-badge badge-validado">validado</span>'
     : '<span class="tx-badge badge-interno">interno</span>';
+  const badgeConciliado = l.conciliado ? '<span class="tx-badge" style="background:#cffafe;color:#0e7490">🔗 conciliado</span>' : '';
   const amtClass = isInterno ? 'neu' : l.tipo === 'receita' ? 'pos' : 'neg';
   const amtPrefix = isInterno ? '' : l.tipo === 'receita' ? '+ ' : '- ';
   const cor = isInterno ? '#f1f5f9' : l.tipo === 'receita' ? '#dcfce7' : '#fef3c7';
@@ -368,7 +413,7 @@ function buildTxItem(l) {
   const tags = (l.tags || []).map(t => '<span class="tag-pill">' + t + '</span>').join('');
   return '<div class="tx-item">' +
     '<div class="tx-icon" style="background:' + cor + '"><i class="ti ' + icon + '" style="color:' + iconCor + '"></i></div>' +
-    '<div class="tx-info"><div class="tx-name">' + l.descricao + badge + '</div>' +
+    '<div class="tx-info"><div class="tx-name">' + l.descricao + badge + badgeConciliado + '</div>' +
     '<div class="tx-cat">' + catNome + (tags ? ' ' + tags : '') + '</div></div>' +
     '<div class="tx-right"><div class="tx-amount ' + amtClass + '">' + amtPrefix + fmt(l.valor) + '</div>' +
     '<div class="tx-date">' + formatarData(l.data) + '</div></div></div>';
@@ -755,6 +800,71 @@ function classificarCategoria(descricao) {
 
 
 // ========================
+// CLASSIFICAÇÃO COM IA
+// ========================
+async function classificarComIA(lancamentos) {
+  const pendentes = lancamentos.filter(function(l) { return l.tipo !== 'interno' && (!l.categoria || l.categoria === 'outros'); });
+  if (!pendentes.length) return;
+
+  // Mostra loading
+  const tbody = document.getElementById('tbody-preview');
+  if (tbody) {
+    const tr = document.createElement('tr');
+    tr.id = 'ia-loading-row';
+    tr.innerHTML = '<td colspan="9" style="text-align:center;padding:14px;color:var(--text2);font-size:13px"><span style="display:inline-flex;align-items:center;gap:8px"><i class="ti ti-robot" style="font-size:16px;color:var(--accent)"></i> Classificando com IA...</span></td>';
+    tbody.insertBefore(tr, tbody.firstChild);
+  }
+
+  const planoCats = DB.categorias.map(function(c) {
+    return c.codigo + ' ' + c.nome + (c.subcats && c.subcats.length ? ' [' + c.subcats.join(', ') + ']' : '');
+  }).join('\n');
+
+  const itens = pendentes.map(function(l) {
+    return { id: l.id, descricao: l.descricao, tipo: l.tipo, valor: l.valor };
+  });
+
+  const promptTexto = 'Você é um classificador financeiro pessoal do Paulo Alioti, 23 anos, brasileiro.\n\nPlano de contas disponível (formato: código nome [subcategorias]):\n' + planoCats + '\n\nClassifique cada lançamento abaixo com a categoria e subcategoria mais adequadas.\nRetorne APENAS um array JSON válido, sem markdown, sem texto extra.\nFormato: [{"id":"...","categoria":"id_da_categoria","subcategoria":"nome_da_subcat_ou_vazio"}]\n\nLançamentos:\n' + JSON.stringify(itens);
+
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: promptTexto }]
+      })
+    });
+
+    const data = await response.json();
+    const textoResposta = (data.content || []).filter(function(b) { return b.type === 'text'; }).map(function(b) { return b.text; }).join('');
+    const limpo = textoResposta.replace(/```json|```/g, '').trim();
+    const resultado = JSON.parse(limpo);
+
+    resultado.forEach(function(item) {
+      const l = lancamentos.find(function(x) { return x.id === item.id; });
+      if (l && item.categoria) {
+        const catValida = DB.categorias.find(function(c) { return c.id === item.categoria; });
+        if (catValida) {
+          l.categoria = item.categoria;
+          l.subcategoria = item.subcategoria || '';
+          l.classificadoPorIA = true;
+        }
+      }
+    });
+  } catch(e) {
+    console.error('Erro na classificação com IA:', e);
+  }
+
+  // Remove loading e re-renderiza
+  const loadingRow = document.getElementById('ia-loading-row');
+  if (loadingRow) loadingRow.remove();
+
+  // Re-renderiza o preview com as classificações da IA
+  renderPreviewTabela(lancamentos);
+}
+
+// ========================
 // REGRAS DE CLASSIFICAÇÃO
 // ========================
 function verificarESalvarRegra(descricao, lançamento) {
@@ -892,11 +1002,89 @@ function getTagsSelecionadas(containerId) {
   return [...el.querySelectorAll('input[type=checkbox]:checked')].map(c => c.value);
 }
 
+function renderPreviewTabela(lancamentos) {
+  const tbody = document.getElementById('tbody-preview');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  lancamentos.forEach(function(l, i) {
+    const isInterno = l.tipo === 'interno';
+    const amtClass = isInterno ? 'neu' : l.tipo === 'receita' ? 'pos' : 'neg';
+    const amtPrefix = isInterno ? '' : l.tipo === 'receita' ? '+' : '-';
+    const jaValidado = l.status === 'validado';
+    const semCat = !l.categoria || l.categoria === 'outros';
+    const porIA = l.classificadoPorIA;
+    let rowStyle = '';
+    if (jaValidado) rowStyle = 'background:#f0fdf4';
+    else if (semCat) rowStyle = 'background:#fff7ed';
+
+    let regraTag = '';
+    if (jaValidado && porIA) regraTag = '<span style="font-size:10px;padding:1px 5px;border-radius:99px;background:#dbeafe;color:#1d4ed8;margin-left:4px">🤖</span>';
+    else if (jaValidado) regraTag = '<span style="font-size:10px;padding:1px 5px;border-radius:99px;background:#dcfce7;color:#166534;margin-left:4px">✓</span>';
+
+    const catsFiltradas = DB.categorias.filter(function(c) { return getCategoriasPorTipo(l.tipo).includes(c.id); });
+    const catOpts = '<option value="">— categoria —</option>' + catsFiltradas.map(function(c) { return '<option value="' + c.id + '"' + (c.id === l.categoria ? ' selected' : '') + '>' + c.nome + '</option>'; }).join('');
+    const subcats = getSubcats(l.categoria);
+    const subcatOpts = '<option value="">—</option>' + subcats.map(function(s) { return '<option value="' + s + '"' + (s === l.subcategoria ? ' selected' : '') + '>' + s + '</option>'; }).join('');
+
+    // Tags como pills clicáveis (mesmo padrão do seletor de tags)
+    const tagsHtml = DB.tags.length
+      ? DB.tags.map(function(tag) {
+          const sel = (l.tags || []).includes(tag.nome);
+          return '<label style="display:inline-flex;align-items:center;gap:3px;margin:1px 2px;cursor:pointer;padding:2px 7px;border-radius:99px;border:0.5px solid ' + (sel ? tag.cor : 'var(--border-light)') + ';background:' + (sel ? tag.cor + '22' : 'transparent') + ';font-size:11px;white-space:nowrap">' +
+            '<input type="checkbox" value="' + tag.nome + '" ' + (sel ? 'checked' : '') + ' style="display:none" onchange="atualizarTagsPreview(' + i + ')">' +
+            '<span style="width:6px;height:6px;border-radius:50%;background:' + tag.cor + '"></span>' +
+            '<span style="color:' + (sel ? tag.cor : 'var(--text2)') + '">' + tag.nome + '</span>' +
+          '</label>';
+        }).join('')
+      : '<span style="font-size:11px;color:var(--text3)">—</span>';
+
+    // Botão check por linha
+    const btnCheck = jaValidado
+      ? '<span style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:6px;background:#dcfce7;color:#16a34a;font-size:14px" title="Validado">✓</span>'
+      : '<button class="btn" style="font-size:11px;padding:3px 7px;color:#16a34a;border-color:#16a34a" title="Marcar como validado" onclick="validarLinhaPreview(' + i + ')"><i class="ti ti-check"></i></button>';
+
+    tbody.innerHTML += '<tr id="preview-row-' + i + '" style="' + rowStyle + '">' +
+      // Checkbox seleção
+      '<td style="width:32px;text-align:center"><input type="checkbox" class="preview-check" data-idx="' + i + '" style="width:14px;height:14px;cursor:pointer"></td>' +
+      // Data
+      '<td style="white-space:nowrap;font-size:12px">' + formatarData(l.data) + '</td>' +
+      // Tipo
+      '<td><select style="padding:3px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:12px;min-width:90px" onchange="previewLancs[' + i + '].tipo=this.value;atualizarCatsFiltroPreview(' + i + ',this.value)">' +
+        '<option value="despesa"' + (l.tipo === 'despesa' ? ' selected' : '') + '>Despesa</option>' +
+        '<option value="receita"' + (l.tipo === 'receita' ? ' selected' : '') + '>Receita</option>' +
+        '<option value="interno"' + (l.tipo === 'interno' ? ' selected' : '') + '>Interno</option>' +
+      '</select></td>' +
+      // Descrição
+      '<td><div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">' +
+        '<input type="text" value="' + l.descricao.replace(/"/g, '&quot;') + '" style="flex:1;min-width:130px;padding:3px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:12px" onchange="previewLancs[' + i + '].descricao=this.value">' +
+        regraTag +
+        (l._matchSugerido ? '<span style="font-size:10px;padding:1px 6px;border-radius:99px;background:#cffafe;color:#0e7490;cursor:help;white-space:nowrap" title="Corresponde a: ' + l._matchSugerido.descricao.replace(/"/g,'&quot;') + ' (' + (l._matchSugerido.tipoMatch === 'exato' ? 'data e valor exatos' : 'aproximado, ' + l._matchSugerido.difDias + ' dias') + ')">🔗 ' + (l._matchSugerido.tipo === 'previsto' ? 'previsto' : 'já lançado') + '</span>' : '') +
+      '</div></td>' +
+      // Categoria
+      '<td style="min-width:140px">' +
+        '<select style="width:100%;padding:3px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:12px' + (semCat && !jaValidado ? ';border-color:#f59e0b' : '') + '" onchange="previewLancs[' + i + '].categoria=this.value;atualizarSubcatPreview(' + i + ',this.value)">' + catOpts + '</select>' +
+      '</td>' +
+      // Subcategoria
+      '<td style="min-width:110px">' +
+        '<select id="subcat-preview-' + i + '" style="width:100%;padding:3px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:11px;color:var(--text2)" onchange="previewLancs[' + i + '].subcategoria=this.value">' + subcatOpts + '</select>' +
+      '</td>' +
+      // Tags
+      '<td style="min-width:100px" id="preview-tags-cell-' + i + '">' + tagsHtml + '</td>' +
+      // Valor
+      '<td class="tx-amount ' + amtClass + '" style="white-space:nowrap;font-size:13px">' + amtPrefix + ' ' + fmt(l.valor) + '</td>' +
+      // Botões: check + lixeira
+      '<td style="white-space:nowrap;display:flex;gap:4px;align-items:center;padding:8px 12px">' +
+        btnCheck +
+        '<button class="btn" style="font-size:11px;padding:3px 7px;color:var(--red)" title="Excluir" onclick="removerPreview(' + i + ')"><i class="ti ti-trash"></i></button>' +
+      '</td></tr>';
+  });
+}
+
 function mostrarPreview(lancamentos) {
   if (!lancamentos.length) { toast('Nenhum lançamento encontrado no arquivo'); return; }
 
-  // Aplica regras completas antes de mostrar
-  lancamentos.forEach(l => {
+  // 1. Aplica regras personalizadas
+  lancamentos.forEach(function(l) {
     const regra = aplicarRegra(l.descricao);
     if (regra) {
       if (regra.tipo) l.tipo = regra.tipo;
@@ -907,77 +1095,32 @@ function mostrarPreview(lancamentos) {
     }
   });
 
-  const tbody = document.getElementById('tbody-preview');
-  tbody.innerHTML = '';
-  lancamentos.forEach((l, i) => {
-    const isInterno = l.tipo === 'interno';
-    const amtClass = isInterno ? 'neu' : l.tipo === 'receita' ? 'pos' : 'neg';
-    const amtPrefix = isInterno ? '' : l.tipo === 'receita' ? '+' : '-';
-    const temRegra = l.status === 'validado';
-    const rowStyle = !l.categoria || l.categoria === 'outros' ? 'background:#fff7ed' : (temRegra ? 'background:#f0fdf4' : '');
-    const regraTag = temRegra ? '<span style="font-size:10px;padding:1px 5px;border-radius:99px;background:#dcfce7;color:#166534;margin-left:4px">✓</span>' : '';
-
-    const catsFiltradas = DB.categorias.filter(c => getCategoriasPorTipo(l.tipo).includes(c.id));
-    const catOpts = '<option value="">— categoria —</option>' + catsFiltradas.map(c => '<option value="'+c.id+'"'+(c.id===l.categoria?' selected':'')+'>'+c.nome+'</option>').join('');
-    const subcats = getSubcats(l.categoria);
-    const subcatOpts = '<option value="">—</option>' + subcats.map(s => '<option value="'+s+'"'+(s===l.subcategoria?' selected':'')+'>'+s+'</option>').join('');
-
-    const tagsHtml = DB.tags.length
-      ? DB.tags.map(tag =>
-          '<label style="display:inline-flex;align-items:center;gap:3px;margin:1px 2px;cursor:pointer;padding:2px 6px;border-radius:99px;border:0.5px solid '+((l.tags||[]).includes(tag.nome)?tag.cor:'var(--border-light)')+';background:'+((l.tags||[]).includes(tag.nome)?tag.cor+'22':'transparent')+';font-size:11px;white-space:nowrap">' +
-            '<input type="checkbox" value="'+tag.nome+'" '+((l.tags||[]).includes(tag.nome)?'checked':'')+' style="display:none" onchange="atualizarTagsPreview('+i+')">' +
-            '<span style="width:5px;height:5px;border-radius:50%;background:'+tag.cor+'"></span>' +
-            '<span style="color:'+((l.tags||[]).includes(tag.nome)?tag.cor:'var(--text2)')+'">'+tag.nome+'</span>' +
-          '</label>'
-        ).join('')
-      : '<span style="font-size:11px;color:var(--text3)">—</span>';
-
-    tbody.innerHTML += '<tr id="preview-row-'+i+'" style="'+rowStyle+'">' +
-      // Checkbox seleção
-      '<td style="width:32px;text-align:center"><input type="checkbox" class="preview-check" data-idx="'+i+'" style="width:14px;height:14px;cursor:pointer"></td>' +
-      // Data
-      '<td style="white-space:nowrap;font-size:12px">'+formatarData(l.data)+'</td>' +
-      // Tipo
-      '<td><select style="padding:3px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:12px;min-width:90px" onchange="previewLancs['+i+'].tipo=this.value;atualizarCatsFiltroPreview('+i+',this.value)">' +
-        '<option value="despesa"'+(l.tipo==='despesa'?' selected':'')+'>Despesa</option>' +
-        '<option value="receita"'+(l.tipo==='receita'?' selected':'')+'>Receita</option>' +
-        '<option value="interno"'+(l.tipo==='interno'?' selected':'')+'>Interno</option>' +
-      '</select></td>' +
-      // Descrição
-      '<td><div style="display:flex;align-items:center;gap:4px">' +
-        '<input type="text" value="'+l.descricao.replace(/"/g,'&quot;')+'" style="width:100%;min-width:130px;padding:3px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:12px" onchange="previewLancs['+i+'].descricao=this.value">' +
-        regraTag +
-      '</div></td>' +
-      // Categoria
-      '<td style="min-width:140px">' +
-        '<select style="width:100%;padding:3px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:12px'+((!l.categoria||l.categoria==='outros')&&!temRegra?';border-color:#f59e0b':'')+'" onchange="previewLancs['+i+'].categoria=this.value;atualizarSubcatPreview('+i+',this.value)">'+catOpts+'</select>' +
-      '</td>' +
-      // Subcategoria
-      '<td style="min-width:110px">' +
-        '<select id="subcat-preview-'+i+'" style="width:100%;padding:3px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:11px;color:var(--text2)" onchange="previewLancs['+i+'].subcategoria=this.value">'+subcatOpts+'</select>' +
-      '</td>' +
-      // Tags
-      '<td style="min-width:100px" id="preview-tags-cell-'+i+'">' + tagsHtml + '</td>' +
-      // Valor
-      '<td class="tx-amount '+amtClass+'" style="white-space:nowrap;font-size:13px">'+amtPrefix+' '+fmt(l.valor)+'</td>' +
-      // Botões
-      '<td style="white-space:nowrap">' +
-        '<button class="btn" style="font-size:11px;padding:3px 7px;color:var(--red)" title="Excluir" onclick="removerPreview('+i+')"><i class="ti ti-trash"></i></button>' +
-      '</td></tr>';
+  // 1.5 Busca conciliação com previstos/lançamentos existentes
+  lancamentos.forEach(function(l) {
+    const match = buscarConciliacao(l);
+    if (match) {
+      l._matchSugerido = match;
+    }
   });
 
   window.previewLancs = lancamentos;
   document.getElementById('preview-importacao').style.display = 'block';
-  // Garante aba preview ativa
   switchTabImport('preview', document.querySelector('#preview-importacao .tab'));
-  // Reset select-all
   const sa = document.getElementById('select-all-preview');
   if (sa) sa.checked = false;
 
+  // Renderiza tabela
+  renderPreviewTabela(lancamentos);
+
   const total = lancamentos.length;
-  const auto = lancamentos.filter(l => l.status === 'validado').length;
-  const semCat = lancamentos.filter(l => !l.categoria || l.categoria === 'outros').length;
-  toast(total + ' lançamentos' + (auto ? ' — ' + auto + ' automáticos' : '') + (semCat ? ' — ' + semCat + ' sem categoria' : ''));
+  const auto = lancamentos.filter(function(l) { return l.status === 'validado'; }).length;
+  const semCat = lancamentos.filter(function(l) { return !l.categoria || l.categoria === 'outros'; }).length;
+  toast(total + ' lançamentos' + (auto ? ' — ' + auto + ' automáticos' : '') + (semCat ? ' — ' + semCat + ' chamando IA...' : ''));
+
+  // 2. Chama IA para classificar os que ficaram sem categoria
+  if (semCat > 0) {
+    classificarComIA(lancamentos);
+  }
 }
 
 function atualizarSubcatPreview(i, catId) {
@@ -1026,14 +1169,26 @@ function ignorarPreview(i) {
   window.previewLancs.splice(i, 1);
   salvarDB();
   atualizarBadgeIgnorados();
-  if (window.previewLancs.length) mostrarPreview(window.previewLancs);
+  if (window.previewLancs.length) renderPreviewTabela(window.previewLancs);
   else { document.getElementById('preview-importacao').style.display = 'none'; toast('Todos ignorados'); }
 }
 
 function removerPreview(i) {
   window.previewLancs.splice(i, 1);
-  if (window.previewLancs.length) mostrarPreview(window.previewLancs);
+  if (window.previewLancs.length) renderPreviewTabela(window.previewLancs);
   else document.getElementById('preview-importacao').style.display = 'none';
+}
+
+function validarLinhaPreview(i) {
+  if (!window.previewLancs || !window.previewLancs[i]) return;
+  const l = window.previewLancs[i];
+  if (!l.categoria || l.categoria === 'outros' || l.categoria === '') {
+    toast('Selecione uma categoria antes de validar');
+    return;
+  }
+  l.status = 'validado';
+  renderPreviewTabela(window.previewLancs);
+  toast('Lançamento marcado como validado');
 }
 
 function selecionarTodosPreview(checked) {
@@ -1054,7 +1209,7 @@ function ignorarSelecionados() {
   salvarDB();
   atualizarBadgeIgnorados();
   toast(selecionados.length + ' lançamento(s) ignorado(s)');
-  if (window.previewLancs.length) mostrarPreview(window.previewLancs);
+  if (window.previewLancs.length) renderPreviewTabela(window.previewLancs);
   else document.getElementById('preview-importacao').style.display = 'none';
 }
 
@@ -1105,6 +1260,7 @@ function restaurarIgnorado(i) {
   atualizarBadgeIgnorados();
   renderIgnorados();
   document.getElementById('preview-importacao').style.display = 'block';
+  renderPreviewTabela(window.previewLancs);
   toast('Lançamento restaurado para o preview');
 }
 
@@ -1124,7 +1280,6 @@ function salvarImportacao() {
   const semCategoria = window.previewLancs.filter(l => l.tipo !== 'interno' && (!l.categoria || l.categoria === 'outros' || l.categoria === ''));
   if (semCategoria.length) {
     toast('⚠️ ' + semCategoria.length + ' lançamento(s) sem categoria. Classifique antes de salvar.');
-    // Destaca linhas sem categoria
     window.previewLancs.forEach((l, i) => {
       const row = document.getElementById('preview-row-' + i);
       if (!row) return;
@@ -1136,14 +1291,37 @@ function salvarImportacao() {
     return;
   }
 
-  DB.lancamentos.push(...window.previewLancs);
+  // Aplica conciliações antes de salvar
+  let conciliados = 0;
+  const aImportar = [];
+  window.previewLancs.forEach(l => {
+    const match = l._matchSugerido;
+    // Limpa campos auxiliares
+    delete l._matchSugerido;
+    if (match) {
+      aplicarConciliacao(l, match);
+      conciliados++;
+      if (match.tipo === 'lancamento') {
+        // O lançamento existente foi marcado como conciliado; não duplica o do extrato
+        return;
+      }
+      // Se for previsto, o lançamento do extrato entra (já vinculado ao previsto)
+    }
+    delete l._conciliarCom;
+    aImportar.push(l);
+  });
+
+  DB.lancamentos.push(...aImportar);
   salvarDB();
   document.getElementById('preview-importacao').style.display = 'none';
   const total = window.previewLancs.length;
-  const autoClassificados = window.previewLancs.filter(l => l.status === 'validado').length;
+  const autoClassificados = aImportar.filter(l => l.status === 'validado').length;
   window.previewLancs = [];
   atualizarBannerValidacao(); renderDashboard();
-  toast(total + ' lançamentos salvos — ' + autoClassificados + ' já validados automaticamente');
+  let msg = total + ' lançamentos processados';
+  if (conciliados > 0) msg += ' — ' + conciliados + ' conciliados 🔗';
+  if (autoClassificados > 0) msg += ' — ' + autoClassificados + ' auto-classificados';
+  toast(msg);
 }
 
 function salvarManual(e) {
@@ -1486,6 +1664,214 @@ function copiarResumo() {
 
 // ========================
 // SELECTS
+// ========================
+// PREVISÃO / PREVISIBILIDADE
+// ========================
+function renderPrevisao() {
+  const tbody = document.getElementById('tbody-previstos');
+  if (tbody) {
+    const previstos = [...(DB.previstos || [])].sort((a, b) => (a.dia || 0) - (b.dia || 0));
+    if (!previstos.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:20px">Nenhum lançamento previsto. Cadastre seus gastos e receitas fixos.</td></tr>';
+    } else {
+      tbody.innerHTML = previstos.map(p => {
+        const amtClass = p.tipo === 'receita' ? 'pos' : p.tipo === 'interno' ? 'neu' : 'neg';
+        const amtPrefix = p.tipo === 'receita' ? '+' : p.tipo === 'interno' ? '' : '-';
+        // Verifica se já foi realizado (conciliado) no mês atual
+        const realizado = DB.lancamentos.find(l => l.previstoId === p.id && l.data.slice(0, 7) === mesAtual);
+        const hoje = new Date();
+        const diaHoje = hoje.getDate();
+        const mesHoje = hoje.toISOString().slice(0, 7);
+        let statusBadge;
+        if (realizado) {
+          statusBadge = '<span style="font-size:10px;padding:2px 8px;border-radius:99px;background:#dcfce7;color:#166534">✓ Realizado</span>';
+        } else if (mesAtual === mesHoje && p.dia && p.dia < diaHoje) {
+          statusBadge = '<span style="font-size:10px;padding:2px 8px;border-radius:99px;background:#fee2e2;color:#b91c1c">⚠ Atrasado</span>';
+        } else {
+          statusBadge = '<span style="font-size:10px;padding:2px 8px;border-radius:99px;background:#fef9c3;color:#a16207">○ Pendente</span>';
+        }
+        return '<tr>' +
+          '<td style="white-space:nowrap"><span style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:6px;background:var(--bg);font-size:12px;font-weight:500">' + (p.dia || '—') + '</span></td>' +
+          '<td style="font-weight:500">' + p.descricao + ' ' + statusBadge + '</td>' +
+          '<td><span style="font-size:12px;color:var(--text2)">' + getNomeCat(p.categoria) + (p.subcategoria ? ' › ' + p.subcategoria : '') + '</span></td>' +
+          '<td><span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--bg);color:var(--text2)">' + (p.tipo === 'receita' ? 'Receita' : p.tipo === 'interno' ? 'Interno' : 'Despesa') + '</span></td>' +
+          '<td class="tx-amount ' + amtClass + '">' + amtPrefix + ' ' + fmt(p.valor) + '</td>' +
+          '<td style="white-space:nowrap">' +
+            '<button class="btn" style="font-size:11px;padding:3px 7px" onclick="editarPrevisto(\'' + p.id + '\')"><i class="ti ti-pencil"></i></button> ' +
+            '<button class="btn" style="font-size:11px;padding:3px 7px;color:var(--red)" onclick="excluirPrevisto(\'' + p.id + '\')"><i class="ti ti-trash"></i></button>' +
+          '</td>' +
+        '</tr>';
+      }).join('');
+    }
+  }
+
+  const receitaPrev = (DB.previstos || []).filter(p => p.tipo === 'receita').reduce((a, b) => a + b.valor, 0);
+  const despesaPrev = (DB.previstos || []).filter(p => p.tipo === 'despesa').reduce((a, b) => a + b.valor, 0);
+  const sobraPrev = receitaPrev - despesaPrev;
+  const elRec = document.getElementById('prev-receita');
+  const elDesp = document.getElementById('prev-despesa');
+  const elSobra = document.getElementById('prev-sobra');
+  if (elRec) elRec.textContent = fmt(receitaPrev);
+  if (elDesp) elDesp.textContent = fmt(despesaPrev);
+  if (elSobra) elSobra.textContent = fmt(sobraPrev);
+
+  const lista = document.getElementById('lista-orcamento-previsao');
+  if (lista) {
+    const cats = DB.categorias.filter(c => !c.id.startsWith('rec_') && !c.id.startsWith('inv_') && c.id !== 'outros');
+    lista.innerHTML = cats.map(c => {
+      const orc = DB.orcamentos[c.id] || 0;
+      return '<div class="cat-item">' +
+        '<span class="cat-label" style="min-width:140px">' + c.nome + '</span>' +
+        '<div class="orc-input-wrap" style="flex:1;justify-content:flex-end">' +
+          '<span style="font-size:12px;color:var(--text3)">R$</span>' +
+          '<input type="number" class="orc-input" value="' + (orc || '') + '" placeholder="—" step="0.01" onchange="salvarOrcamento(\'' + c.id + '\',this.value);renderPrevisao()">' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+}
+
+function abrirModalPrevisto() {
+  document.getElementById('previsto-id').value = '';
+  document.getElementById('previsto-modal-titulo').textContent = 'Novo lançamento previsto';
+  document.getElementById('previsto-descricao').value = '';
+  document.getElementById('previsto-valor').value = '';
+  document.getElementById('previsto-dia').value = '';
+  document.getElementById('previsto-tipo').value = 'despesa';
+  preencherSelectCategoriaPorTipo('previsto-categoria', 'despesa', '');
+  atualizarSubcatPrevisto();
+  document.getElementById('modal-previsto').style.display = 'flex';
+}
+
+function atualizarSubcatPrevisto() {
+  const catId = document.getElementById('previsto-categoria').value;
+  const sel = document.getElementById('previsto-subcategoria');
+  if (!sel) return;
+  const subcats = getSubcats(catId);
+  sel.innerHTML = '<option value="">Sem subcategoria</option>' + subcats.map(s => '<option value="' + s + '">' + s + '</option>').join('');
+}
+
+function salvarPrevisto() {
+  const id = document.getElementById('previsto-id').value;
+  const descricao = document.getElementById('previsto-descricao').value.trim();
+  const valor = parseFloat(document.getElementById('previsto-valor').value);
+  const dia = parseInt(document.getElementById('previsto-dia').value) || null;
+  const tipo = document.getElementById('previsto-tipo').value;
+  const categoria = document.getElementById('previsto-categoria').value;
+  const subcategoria = document.getElementById('previsto-subcategoria').value;
+  if (!descricao) { toast('Informe a descrição'); return; }
+  if (isNaN(valor) || valor <= 0) { toast('Informe um valor válido'); return; }
+  if (!categoria) { toast('Selecione uma categoria'); return; }
+
+  if (id) {
+    const p = DB.previstos.find(x => x.id === id);
+    if (p) { Object.assign(p, { descricao, valor, dia, tipo, categoria, subcategoria }); }
+  } else {
+    if (!DB.previstos) DB.previstos = [];
+    DB.previstos.push({ id: gerarId(), descricao, valor, dia, tipo, categoria, subcategoria });
+  }
+  salvarDB();
+  fecharModal('modal-previsto');
+  renderPrevisao();
+  renderDashboard();
+  toast('Previsto salvo!');
+}
+
+function editarPrevisto(id) {
+  const p = DB.previstos.find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('previsto-id').value = p.id;
+  document.getElementById('previsto-modal-titulo').textContent = 'Editar lançamento previsto';
+  document.getElementById('previsto-descricao').value = p.descricao;
+  document.getElementById('previsto-valor').value = p.valor;
+  document.getElementById('previsto-dia').value = p.dia || '';
+  document.getElementById('previsto-tipo').value = p.tipo;
+  preencherSelectCategoriaPorTipo('previsto-categoria', p.tipo, p.categoria);
+  atualizarSubcatPrevisto();
+  document.getElementById('previsto-subcategoria').value = p.subcategoria || '';
+  document.getElementById('modal-previsto').style.display = 'flex';
+}
+
+function excluirPrevisto(id) {
+  if (!confirm('Excluir este lançamento previsto?')) return;
+  DB.previstos = DB.previstos.filter(x => x.id !== id);
+  salvarDB();
+  renderPrevisao();
+  renderDashboard();
+  toast('Previsto removido');
+}
+
+// ========================
+// CONCILIAÇÃO BANCÁRIA
+// ========================
+// Busca correspondência entre um lançamento do extrato e os lançamentos/previstos do sistema
+function buscarConciliacao(lancExtrato) {
+  const valorExtrato = Math.abs(lancExtrato.valor);
+  const dataExtrato = new Date(lancExtrato.data);
+
+  // Candidatos: lançamentos manuais não conciliados + previstos do mês
+  const candidatos = [];
+
+  // Lançamentos já no sistema, não conciliados, mesmo tipo
+  DB.lancamentos.forEach(l => {
+    if (l.conciliado) return;
+    if (l.origem) return; // ignora os que vieram de importação anterior
+    if (l.tipo !== lancExtrato.tipo) return;
+    candidatos.push({ tipo: 'lancamento', ref: l, descricao: l.descricao, valor: Math.abs(l.valor), data: l.data });
+  });
+
+  // Previstos: gera data esperada no mês do extrato
+  const mesExtrato = lancExtrato.data.slice(0, 7);
+  (DB.previstos || []).forEach(p => {
+    if (p.tipo !== lancExtrato.tipo) return;
+    // Verifica se já foi conciliado esse previsto nesse mês
+    const jaConciliado = DB.lancamentos.some(l => l.previstoId === p.id && l.data.slice(0, 7) === mesExtrato);
+    if (jaConciliado) return;
+    const dataPrev = p.dia ? mesExtrato + '-' + String(p.dia).padStart(2, '0') : lancExtrato.data;
+    candidatos.push({ tipo: 'previsto', ref: p, descricao: p.descricao, valor: Math.abs(p.valor), data: dataPrev });
+  });
+
+  let melhorMatch = null;
+  let melhorScore = -1;
+
+  candidatos.forEach(c => {
+    const difValor = Math.abs(c.valor - valorExtrato);
+    const tolValor = valorExtrato * 0.02; // 2% de tolerância
+    const difDias = Math.abs((new Date(c.data) - dataExtrato) / (1000 * 60 * 60 * 24));
+
+    // Match exato: valor igual e data igual
+    if (difValor < 0.01 && difDias < 1) {
+      const score = 100;
+      if (score > melhorScore) { melhorScore = score; melhorMatch = { ...c, tipoMatch: 'exato', difDias: Math.round(difDias) }; }
+    }
+    // Match aproximado: valor dentro da tolerância e até 5 dias
+    else if (difValor <= tolValor && difDias <= 5) {
+      const score = 50 - difDias; // quanto mais perto a data, melhor
+      if (score > melhorScore) { melhorScore = score; melhorMatch = { ...c, tipoMatch: 'aproximado', difDias: Math.round(difDias) }; }
+    }
+  });
+
+  return melhorMatch;
+}
+
+// Aplica conciliação a um lançamento do preview
+function aplicarConciliacao(previewLanc, match) {
+  if (match.tipo === 'lancamento') {
+    // Marca o lançamento existente como conciliado e atualiza com dados do banco
+    match.ref.conciliado = true;
+    match.ref.dataExtrato = previewLanc.data;
+    match.ref.origem = previewLanc.origem;
+    previewLanc._conciliarCom = { tipo: 'lancamento', id: match.ref.id };
+  } else if (match.tipo === 'previsto') {
+    // O lançamento do extrato vira o realizado, vinculado ao previsto
+    previewLanc.previstoId = match.ref.id;
+    previewLanc.categoria = match.ref.categoria;
+    previewLanc.subcategoria = match.ref.subcategoria || '';
+    previewLanc.conciliado = true;
+    previewLanc._conciliarCom = { tipo: 'previsto', id: match.ref.id };
+  }
+}
+
 // ========================
 // Mapeamento de tipo para IDs de categoria
 function getCategoriasPorTipo(tipo) {
