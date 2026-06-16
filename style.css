@@ -373,6 +373,29 @@ body {
 .orc-input-wrap { display: flex; align-items: center; gap: 6px; }
 .orc-input { width: 100px; padding: 4px 8px; border-radius: 6px; border: 0.5px solid var(--border-light); font-size: 13px; font-family: inherit; text-align: right; }
 
+/* CONCILIAÇÃO — inspirado no Conta Azul */
+.conc-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; padding: 2px 8px; border-radius: 99px;
+  background: #cffafe; color: #0e7490; border: 0.5px solid #a5f3fc;
+}
+.conc-col-banco {
+  background: #f8fafc; border-radius: 10px; padding: 12px;
+  border: 0.5px solid var(--border-light);
+}
+.conc-col-sistema {
+  background: #f0fdfa; border-radius: 10px; padding: 12px;
+  border: 0.5px solid #99f6e4;
+}
+.conc-match-card {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; border-radius: 8px; margin-bottom: 8px;
+  background: var(--card); border: 0.5px solid var(--border-light);
+  transition: all 0.15s;
+}
+.conc-match-card:hover { border-color: #2dd4bf; box-shadow: 0 2px 8px rgba(45,212,191,0.1); }
+.conc-match-card.matched { background: #f0fdfa; border-color: #5eead4; }
+
 /* TAGS */
 .tag-pill { display: inline-flex; align-items: center; font-size: 10px; padding: 2px 7px; border-radius: 99px; background: rgba(79,156,249,0.1); color: #2258c4; border: 0.5px solid rgba(79,156,249,0.3); }
 
