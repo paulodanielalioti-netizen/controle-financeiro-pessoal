@@ -21,6 +21,7 @@
       <div class="nav-section">Principal</div>
       <div class="nav-item active" onclick="showPage('dashboard')"><i class="ti ti-layout-dashboard"></i> Dashboard</div>
       <div class="nav-item" onclick="showPage('lancamentos')"><i class="ti ti-arrows-exchange"></i> Lançamentos</div>
+      <div class="nav-item" onclick="showPage('previsao')"><i class="ti ti-calendar-stats"></i> Previsão</div>
       <div class="nav-item" onclick="showPage('importar')"><i class="ti ti-upload"></i> Importar</div>
       <div class="nav-section">Análise</div>
       <div class="nav-item" onclick="showPage('dre')"><i class="ti ti-report-money"></i> DRE</div>
@@ -77,6 +78,31 @@
           <div class="metric-card"><div class="metric-label"><i class="ti ti-wallet"></i> Sobra do mês</div><div class="metric-value" id="m-sobra">R$ 0</div><div class="metric-delta" id="d-sobra"></div></div>
           <div class="metric-card"><div class="metric-label"><i class="ti ti-building-bank"></i> Patrimônio</div><div class="metric-value" id="m-patrimonio">R$ 0</div><div class="metric-delta" id="d-patrimonio"></div></div>
         </div>
+        <!-- Card de Projeção do Mês -->
+        <div class="card" id="card-projecao" style="margin-bottom:16px;display:none">
+          <div class="card-header">
+            <div><div class="card-title">📊 Projeção do mês</div><div class="card-sub" id="projecao-sub">Como o mês deve fechar com base no previsto</div></div>
+            <button class="btn" style="font-size:12px;padding:5px 10px" onclick="showPage('previsao')">Editar previsão</button>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+            <div>
+              <div style="font-size:12px;color:var(--text2);margin-bottom:4px">Receita</div>
+              <div style="display:flex;align-items:baseline;gap:6px"><span style="font-size:16px;font-weight:600" id="proj-receita-real">R$ 0</span><span style="font-size:11px;color:var(--text3)">de <span id="proj-receita-prev">R$ 0</span></span></div>
+              <div class="cat-bar-bg" style="margin-top:6px"><div class="cat-bar" id="proj-receita-bar" style="background:#16a34a;width:0%"></div></div>
+            </div>
+            <div>
+              <div style="font-size:12px;color:var(--text2);margin-bottom:4px">Despesa</div>
+              <div style="display:flex;align-items:baseline;gap:6px"><span style="font-size:16px;font-weight:600" id="proj-despesa-real">R$ 0</span><span style="font-size:11px;color:var(--text3)">de <span id="proj-despesa-prev">R$ 0</span></span></div>
+              <div class="cat-bar-bg" style="margin-top:6px"><div class="cat-bar" id="proj-despesa-bar" style="background:#dc2626;width:0%"></div></div>
+            </div>
+            <div>
+              <div style="font-size:12px;color:var(--text2);margin-bottom:4px">Projeção de fechamento</div>
+              <div style="font-size:18px;font-weight:600" id="proj-fechamento">R$ 0</div>
+              <div style="font-size:11px;margin-top:4px" id="proj-status"></div>
+            </div>
+          </div>
+        </div>
+
         <div class="row-2">
           <div class="card">
             <div class="card-header">
@@ -111,6 +137,41 @@
             <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Tipo</th><th>Valor</th><th>Status</th><th></th></tr></thead>
             <tbody id="tbody-lancamentos"></tbody>
           </table>
+        </div>
+      </div>
+
+      <!-- PREVISÃO -->
+      <div id="page-previsao" class="page">
+        <div class="alert-banner" style="background:linear-gradient(135deg,#0d9488,#14b8a6)">
+          <div>
+            <div class="banner-title">Previsibilidade do mês</div>
+            <div class="banner-sub">Cadastre o que você espera receber e gastar — o sistema projeta como o mês vai fechar</div>
+          </div>
+        </div>
+
+        <!-- Resumo da projeção -->
+        <div class="metrics" style="grid-template-columns:repeat(3,1fr)">
+          <div class="metric-card" style="background:#15803d"><div class="metric-label"><i class="ti ti-arrow-down-circle"></i> Receita prevista</div><div class="metric-value" id="prev-receita">R$ 0</div></div>
+          <div class="metric-card" style="background:#b91c1c"><div class="metric-label"><i class="ti ti-arrow-up-circle"></i> Despesa prevista</div><div class="metric-value" id="prev-despesa">R$ 0</div></div>
+          <div class="metric-card"><div class="metric-label"><i class="ti ti-wallet"></i> Sobra prevista</div><div class="metric-value" id="prev-sobra">R$ 0</div></div>
+        </div>
+
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header">
+            <div><div class="card-title">Lançamentos previstos (recorrentes)</div><div class="card-sub">Gastos e receitas fixos que se repetem todo mês</div></div>
+            <button class="btn btn-accent" onclick="abrirModalPrevisto()"><i class="ti ti-plus"></i> Novo previsto</button>
+          </div>
+          <table class="tx-table">
+            <thead><tr><th>Dia</th><th>Descrição</th><th>Categoria</th><th>Tipo</th><th>Valor</th><th></th></tr></thead>
+            <tbody id="tbody-previstos"></tbody>
+          </table>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div><div class="card-title">Orçamento por categoria</div><div class="card-sub">Teto mensal de gasto para cada categoria</div></div>
+          </div>
+          <div id="lista-orcamento-previsao" class="category-list"></div>
         </div>
       </div>
 
@@ -411,6 +472,37 @@
     <div class="modal-footer">
       <button class="btn btn-accent" onclick="salvarNovaTag()">Salvar</button>
       <button class="btn" onclick="fecharModal('modal-nova-tag')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NOVO PREVISTO -->
+<div id="modal-previsto" class="modal-overlay" style="display:none" onclick="fecharModal('modal-previsto')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title" id="previsto-modal-titulo">Novo lançamento previsto</div>
+      <button class="btn-icon" onclick="fecharModal('modal-previsto')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="previsto-id">
+      <div class="form-row" style="margin-bottom:12px">
+        <div class="form-group"><label>Descrição</label><input type="text" id="previsto-descricao" placeholder="Ex: Aluguel, Salário, Academia..."></div>
+      </div>
+      <div class="form-row" style="margin-bottom:12px">
+        <div class="form-group"><label>Valor (R$)</label><input type="number" id="previsto-valor" step="0.01" placeholder="0,00"></div>
+        <div class="form-group"><label>Dia do mês</label><input type="number" id="previsto-dia" min="1" max="31" placeholder="Ex: 5"></div>
+      </div>
+      <div class="form-row" style="margin-bottom:12px">
+        <div class="form-group"><label>Tipo</label><select id="previsto-tipo" onchange="atualizarCategoriasPorTipo('previsto-tipo','previsto-categoria')"><option value="despesa">Despesa</option><option value="receita">Receita</option><option value="interno">Movimentação interna</option></select></div>
+        <div class="form-group"><label>Categoria</label><select id="previsto-categoria" onchange="atualizarSubcatPrevisto()"></select></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Subcategoria</label><select id="previsto-subcategoria"><option value="">Sem subcategoria</option></select></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-accent" onclick="salvarPrevisto()">Salvar</button>
+      <button class="btn" onclick="fecharModal('modal-previsto')">Cancelar</button>
     </div>
   </div>
 </div>
