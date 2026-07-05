@@ -18,15 +18,16 @@
       <div><div class="user-name">Paulo Alioti</div><div class="user-sub">Financeiro pessoal</div></div>
     </div>
     <nav class="sidebar-nav">
-      <div class="nav-section">Principal</div>
+      <div class="nav-section">Dia a dia</div>
       <div class="nav-item active" onclick="showPage('dashboard')"><i class="ti ti-layout-dashboard"></i> Dashboard</div>
       <div class="nav-item" onclick="showPage('lancamentos')"><i class="ti ti-arrows-exchange"></i> Lançamentos</div>
       <div class="nav-item" onclick="showPage('previsao')"><i class="ti ti-calendar-stats"></i> Previsão</div>
-      <div class="nav-item" onclick="showPage('importar')"><i class="ti ti-upload"></i> Importar</div>
       <div class="nav-section">Análise</div>
       <div class="nav-item" onclick="showPage('dre')"><i class="ti ti-report-money"></i> DRE</div>
       <div class="nav-item" onclick="showPage('planocontas')"><i class="ti ti-list-tree"></i> Plano de Contas</div>
       <div class="nav-item" onclick="showPage('patrimonio')"><i class="ti ti-trending-up"></i> Patrimônio</div>
+      <div class="nav-section">Fechamento</div>
+      <div class="nav-item" onclick="showPage('importar')"><i class="ti ti-checklist"></i> Conferência Mensal</div>
       <div class="nav-section">Sistema</div>
       <div class="nav-item" onclick="showPage('configuracoes')"><i class="ti ti-settings"></i> Configurações</div>
     </nav>
@@ -40,7 +41,7 @@
         <div class="topbar-sub" id="page-sub">Maio 2026</div>
       </div>
       <div class="topbar-actions">
-        <button class="btn" onclick="showPage('importar')"><i class="ti ti-upload"></i> Importar</button>
+        <button class="btn" onclick="showPage('importar')"><i class="ti ti-checklist"></i> Conferência</button>
         <button class="btn btn-dark" onclick="gerarResumoCoach()"><i class="ti ti-message-2"></i> Resumo p/ coach</button>
         <button class="btn btn-accent" onclick="abrirModalLancamento()"><i class="ti ti-plus"></i> Novo lançamento</button>
       </div>
@@ -177,8 +178,14 @@
 
       <!-- IMPORTAR -->
       <div id="page-importar" class="page">
+        <div class="alert-banner" style="background:linear-gradient(135deg,#0d9488,#14b8a6);margin-bottom:16px">
+          <div>
+            <div class="banner-title">Conferência de fim de mês</div>
+            <div class="banner-sub">Importe o extrato do banco para conferir se tudo que você lançou durante o mês está correto. O sistema casa automaticamente o extrato com seus lançamentos.</div>
+          </div>
+        </div>
         <div class="card">
-          <div class="card-title" style="margin-bottom:16px">Importar extrato</div>
+          <div class="card-title" style="margin-bottom:16px">Importar extrato para conferência</div>
           <div class="import-tabs">
             <button class="tab active" onclick="switchTab('csv',this)">CSV</button>
             <button class="tab" onclick="switchTab('ofx',this)">OFX</button>
@@ -202,24 +209,11 @@
             </div>
           </div>
           <div id="tab-manual" class="tab-content">
-            <form class="form-manual" onsubmit="salvarManual(event)">
-              <div class="form-row">
-                <div class="form-group"><label>Data</label><input type="date" id="manual-data" required></div>
-                <div class="form-group"><label>Valor (R$)</label><input type="number" id="manual-valor" step="0.01" placeholder="0,00" required></div>
-              </div>
-              <div class="form-row">
-                <div class="form-group" style="flex:2"><label>Descrição</label><input type="text" id="manual-descricao" placeholder="Ex: iFood, Uber..." required></div>
-                <div class="form-group"><label>Tipo</label><select id="manual-tipo" onchange="atualizarCategoriasPorTipo('manual-tipo','manual-categoria')"><option value="despesa">Despesa</option><option value="receita">Receita</option><option value="interno">Movimentação interna</option></select></div>
-              </div>
-              <div class="form-row">
-                <div class="form-group"><label>Categoria</label><select id="manual-categoria" onchange="atualizarSubcatManual()"></select></div>
-                <div class="form-group"><label>Subcategoria</label><select id="manual-subcategoria"><option value="">Sem subcategoria</option></select></div>
-              </div>
-              <div class="form-row">
-                <div class="form-group"><label>Tags</label><div id="manual-tags-seletor" style="display:flex;flex-wrap:wrap;gap:4px;padding:4px 0"></div></div>
-              </div>
-              <button type="submit" class="btn btn-accent">Salvar lançamento</button>
-            </form>
+            <div style="text-align:center;padding:24px;color:var(--text2)">
+              <i class="ti ti-arrow-up-right" style="font-size:28px;color:var(--accent)"></i>
+              <div style="margin-top:8px;font-size:14px">O lançamento manual agora fica no botão <b>"+ Novo lançamento"</b> no topo da tela — disponível em qualquer página.</div>
+              <button class="btn btn-accent" style="margin-top:14px" onclick="abrirModalLancamento()"><i class="ti ti-plus"></i> Novo lançamento</button>
+            </div>
           </div>
         </div>
         <div id="preview-importacao" class="card" style="display:none;margin-top:16px">
@@ -419,6 +413,16 @@
         <div class="form-group" style="flex:2"><label>Nome</label><input type="text" id="edit-cat-nome" placeholder="Ex: Alimentação"></div>
         <div class="form-group"><label>Código</label><input type="text" id="edit-cat-codigo" placeholder="Ex: 1.1"></div>
       </div>
+      <div class="form-row" style="margin-bottom:12px">
+        <div class="form-group">
+          <label>Natureza</label>
+          <select id="edit-cat-natureza">
+            <option value="despesa">Despesa</option>
+            <option value="receita">Receita</option>
+            <option value="investimento">Investimento</option>
+          </select>
+        </div>
+      </div>
       <div class="form-group" style="margin-top:12px">
         <label>Cor</label>
         <div style="display:flex;align-items:center;gap:10px">
@@ -503,6 +507,36 @@
     <div class="modal-footer">
       <button class="btn btn-accent" onclick="salvarPrevisto()">Salvar</button>
       <button class="btn" onclick="fecharModal('modal-previsto')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL LANÇAMENTO MANUAL (dia a dia) -->
+<div id="modal-lancamento" class="modal-overlay" style="display:none" onclick="fecharModal('modal-lancamento')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <div class="modal-title">Novo lançamento</div>
+      <button class="btn-icon" onclick="fecharModal('modal-lancamento')"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="modal-body">
+      <form class="form-manual" onsubmit="salvarManual(event)">
+        <div class="form-row">
+          <div class="form-group"><label>Data</label><input type="date" id="manual-data" required></div>
+          <div class="form-group"><label>Valor (R$)</label><input type="number" id="manual-valor" step="0.01" placeholder="0,00" required></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="flex:2"><label>Descrição</label><input type="text" id="manual-descricao" placeholder="Ex: iFood, Uber..." required></div>
+          <div class="form-group"><label>Tipo</label><select id="manual-tipo" onchange="atualizarCategoriasPorTipo('manual-tipo','manual-categoria')"><option value="despesa">Despesa</option><option value="receita">Receita</option><option value="interno">Movimentação interna</option></select></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Categoria</label><select id="manual-categoria" onchange="atualizarSubcatManual()"></select></div>
+          <div class="form-group"><label>Subcategoria</label><select id="manual-subcategoria"><option value="">Sem subcategoria</option></select></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Tags</label><div id="manual-tags-seletor" style="display:flex;flex-wrap:wrap;gap:4px;padding:4px 0"></div></div>
+        </div>
+        <button type="submit" class="btn btn-accent" style="width:100%;justify-content:center;padding:10px">Salvar lançamento</button>
+      </form>
     </div>
   </div>
 </div>
