@@ -6,35 +6,35 @@ let DB = {
   patrimonio: [],
   categorias: [
     // ── RECEITAS ──
-    { id: 'rec_trabalho',     nome: 'Trabalho Fixo',             cor: '#16a34a', codigo: '1.1', subcats: ['Salário Mar&Rio','Comissões'] },
-    { id: 'rec_servicos',     nome: 'Prestação de Serviços',     cor: '#15803d', codigo: '1.2', subcats: ['Clínica de Fisioterapia','BPO Financeiro','Consultoria Contábil','Outros'] },
-    { id: 'rec_projeto_ia',   nome: 'Projeto IA / Automação',    cor: '#166534', codigo: '1.3', subcats: ['Receita Operacional','Participação Societária'] },
-    { id: 'rec_investimentos', nome: 'Rendimentos',              cor: '#14532d', codigo: '1.4', subcats: ['Dividendos','Juros / Renda Fixa','CDB / LCI / LCA','Outros'] },
-    { id: 'rec_eventual',     nome: 'Eventual',                  cor: '#4ade80', codigo: '1.5', subcats: ['Venda de Bens','Outros'] },
+    { id: 'rec_trabalho', natureza: 'receita',     nome: 'Trabalho Fixo',             cor: '#16a34a', codigo: '1.1', subcats: ['Salário Mar&Rio','Comissões'] },
+    { id: 'rec_servicos', natureza: 'receita',     nome: 'Prestação de Serviços',     cor: '#15803d', codigo: '1.2', subcats: ['Clínica de Fisioterapia','BPO Financeiro','Consultoria Contábil','Outros'] },
+    { id: 'rec_projeto_ia', natureza: 'receita',   nome: 'Projeto IA / Automação',    cor: '#166534', codigo: '1.3', subcats: ['Receita Operacional','Participação Societária'] },
+    { id: 'rec_investimentos', natureza: 'receita', nome: 'Rendimentos',              cor: '#14532d', codigo: '1.4', subcats: ['Dividendos','Juros / Renda Fixa','CDB / LCI / LCA','Outros'] },
+    { id: 'rec_eventual', natureza: 'receita',     nome: 'Eventual',                  cor: '#4ade80', codigo: '1.5', subcats: ['Venda de Bens','Outros'] },
     // ── DESPESAS FIXAS ──
-    { id: 'moradia',          nome: 'Moradia',                   cor: '#84cc16', codigo: '2.1', subcats: ['Aluguel','Condomínio','Internet','Água (Semae)','Energia Elétrica','Gás','Outros'] },
-    { id: 'transp_fixo',      nome: 'Transporte Fixo',           cor: '#65a30d', codigo: '2.2', subcats: ['IPVA / Licenciamento','Seguro do Veículo','Financiamento Veículo'] },
-    { id: 'assinaturas',      nome: 'Assinaturas',               cor: '#6366f1', codigo: '2.3', subcats: ['Telefone','Streaming','Google','Apps','Outros'] },
-    { id: 'faculdade',        nome: 'Faculdade',                 cor: '#8b5cf6', codigo: '2.4', subcats: ['Mensalidade Estácio','Material'] },
-    { id: 'igreja',           nome: 'Igreja',                    cor: '#ec4899', codigo: '2.5', subcats: ['Dízimo','Oferta','Eventos'] },
+    { id: 'moradia', natureza: 'despesa',          nome: 'Moradia',                   cor: '#84cc16', codigo: '2.1', subcats: ['Aluguel','Condomínio','Internet','Água (Semae)','Energia Elétrica','Gás','Outros'] },
+    { id: 'transp_fixo', natureza: 'despesa',      nome: 'Transporte Fixo',           cor: '#65a30d', codigo: '2.2', subcats: ['IPVA / Licenciamento','Seguro do Veículo','Financiamento Veículo'] },
+    { id: 'assinaturas', natureza: 'despesa',      nome: 'Assinaturas',               cor: '#6366f1', codigo: '2.3', subcats: ['Telefone','Streaming','Google','Apps','Outros'] },
+    { id: 'faculdade', natureza: 'despesa',        nome: 'Faculdade',                 cor: '#8b5cf6', codigo: '2.4', subcats: ['Mensalidade Estácio','Material'] },
+    { id: 'igreja', natureza: 'despesa',           nome: 'Igreja',                    cor: '#ec4899', codigo: '2.5', subcats: ['Dízimo','Oferta','Eventos'] },
     // ── DESPESAS VARIÁVEIS ──
-    { id: 'alimentacao',      nome: 'Alimentação',               cor: '#f59e0b', codigo: '3.1', subcats: ['Mercado','Delivery','Restaurante','Outros'] },
-    { id: 'transp_variavel',  nome: 'Transporte Variável',       cor: '#d97706', codigo: '3.2', subcats: ['Combustível Carro','Combustível Moto','Manutenção Carro','Manutenção Moto','Pneus','Uber','Estacionamento','Multa'] },
-    { id: 'saude_corpo',      nome: 'Saúde & Corpo',             cor: '#2dd4bf', codigo: '3.3', subcats: ['Academia','Muay thai','Suplemento','Convênio','Nutricionista','Psicólogo','Quiropraxia','Remédio','Equipamentos','Outros'] },
-    { id: 'cuidado_pessoal',  nome: 'Cuidado Pessoal',           cor: '#f43f5e', codigo: '3.4', subcats: ['Barbearia','Cosméticos','Outros'] },
-    { id: 'formacao',         nome: 'Formação',                  cor: '#a855f7', codigo: '3.5', subcats: ['Cursos','Livros','Mentoria','Outros'] },
-    { id: 'lazer',            nome: 'Lazer',                     cor: '#14b8a6', codigo: '3.6', subcats: ['Cinema','Rolê / Social','Viagem','Entretenimento','Conferências','Outros'] },
+    { id: 'alimentacao', natureza: 'despesa',      nome: 'Alimentação',               cor: '#f59e0b', codigo: '3.1', subcats: ['Mercado','Delivery','Restaurante','Outros'] },
+    { id: 'transp_variavel', natureza: 'despesa',  nome: 'Transporte Variável',       cor: '#d97706', codigo: '3.2', subcats: ['Combustível Carro','Combustível Moto','Manutenção Carro','Manutenção Moto','Pneus','Uber','Estacionamento','Multa'] },
+    { id: 'saude_corpo', natureza: 'despesa',      nome: 'Saúde & Corpo',             cor: '#2dd4bf', codigo: '3.3', subcats: ['Academia','Muay thai','Suplemento','Convênio','Nutricionista','Psicólogo','Quiropraxia','Remédio','Equipamentos','Outros'] },
+    { id: 'cuidado_pessoal', natureza: 'despesa',  nome: 'Cuidado Pessoal',           cor: '#f43f5e', codigo: '3.4', subcats: ['Barbearia','Cosméticos','Outros'] },
+    { id: 'formacao', natureza: 'despesa',         nome: 'Formação',                  cor: '#a855f7', codigo: '3.5', subcats: ['Cursos','Livros','Mentoria','Outros'] },
+    { id: 'lazer', natureza: 'despesa',            nome: 'Lazer',                     cor: '#14b8a6', codigo: '3.6', subcats: ['Cinema','Rolê / Social','Viagem','Entretenimento','Conferências','Outros'] },
     // ── GASTOS PONTUAIS ──
-    { id: 'compras',          nome: 'Compras',                   cor: '#fb923c', codigo: '4.1', subcats: ['Vestuário','Eletrônico','Eletrodoméstico','Móvel','Utilitários','Outros'] },
-    { id: 'presentes',        nome: 'Presentes & Datas',         cor: '#f87171', codigo: '4.2', subcats: ['Aniversário','Celebrações','Outros'] },
+    { id: 'compras', natureza: 'despesa',          nome: 'Compras',                   cor: '#fb923c', codigo: '4.1', subcats: ['Vestuário','Eletrônico','Eletrodoméstico','Móvel','Utilitários','Outros'] },
+    { id: 'presentes', natureza: 'despesa',        nome: 'Presentes & Datas',         cor: '#f87171', codigo: '4.2', subcats: ['Aniversário','Celebrações','Outros'] },
     // ── INVESTIMENTOS & PATRIMÔNIO ──
-    { id: 'inv_renda_fixa',   nome: 'Renda Fixa',                cor: '#0d9488', codigo: '5.1', subcats: ['CDB','LCI / LCA','Tesouro Direto'] },
-    { id: 'inv_renda_var',    nome: 'Renda Variável',            cor: '#0f766e', codigo: '5.2', subcats: ['Ações','FIIs','ETFs','BDRs'] },
-    { id: 'inv_reservas',     nome: 'Reservas',                  cor: '#115e59', codigo: '5.3', subcats: ['Reserva de Emergência','Reserva de Oportunidade'] },
-    { id: 'inv_negocio',      nome: 'Negócio',                   cor: '#134e4a', codigo: '5.4', subcats: ['Aporte Projeto IA','Ferramentas / Infraestrutura'] },
-    { id: 'inv_objetivos',    nome: 'Objetivos Futuros',         cor: '#4f9cf9', codigo: '5.5', subcats: ['Poupança Casamento','Fundo Imóvel'] },
+    { id: 'inv_renda_fixa', natureza: 'investimento',   nome: 'Renda Fixa',                cor: '#0d9488', codigo: '5.1', subcats: ['CDB','LCI / LCA','Tesouro Direto'] },
+    { id: 'inv_renda_var', natureza: 'investimento',    nome: 'Renda Variável',            cor: '#0f766e', codigo: '5.2', subcats: ['Ações','FIIs','ETFs','BDRs'] },
+    { id: 'inv_reservas', natureza: 'investimento',     nome: 'Reservas',                  cor: '#115e59', codigo: '5.3', subcats: ['Reserva de Emergência','Reserva de Oportunidade'] },
+    { id: 'inv_negocio', natureza: 'investimento',      nome: 'Negócio',                   cor: '#134e4a', codigo: '5.4', subcats: ['Aporte Projeto IA','Ferramentas / Infraestrutura'] },
+    { id: 'inv_objetivos', natureza: 'investimento',    nome: 'Objetivos Futuros',         cor: '#4f9cf9', codigo: '5.5', subcats: ['Poupança Casamento','Fundo Imóvel'] },
     // ── OUTROS ──
-    { id: 'outros',           nome: 'Outros',                    cor: '#94a3b8', codigo: '9.9', subcats: [] },
+    { id: 'outros', natureza: 'todas',           nome: 'Outros',                    cor: '#94a3b8', codigo: '9.9', subcats: [] },
   ],
   orcamentos: {},
   regras: [],
@@ -90,30 +90,30 @@ function carregarDB() {
       // Migração v3 — força atualização do plano de contas para versão completa com receitas
       if (!parsed.migradoV3) {
         const planoNovo = [
-          { id: 'rec_trabalho',      nome: 'Trabalho Fixo',           cor: '#16a34a', codigo: '1.1', subcats: ['Salário Mar&Rio','Comissões'] },
-          { id: 'rec_servicos',      nome: 'Prestação de Serviços',   cor: '#15803d', codigo: '1.2', subcats: ['Clínica de Fisioterapia','BPO Financeiro','Consultoria Contábil','Outros'] },
-          { id: 'rec_projeto_ia',    nome: 'Projeto IA / Automação',  cor: '#166534', codigo: '1.3', subcats: ['Receita Operacional','Participação Societária'] },
-          { id: 'rec_investimentos', nome: 'Rendimentos',             cor: '#14532d', codigo: '1.4', subcats: ['Dividendos','Juros / Renda Fixa','CDB / LCI / LCA','Outros'] },
-          { id: 'rec_eventual',      nome: 'Eventual',                cor: '#4ade80', codigo: '1.5', subcats: ['Venda de Bens','Outros'] },
-          { id: 'moradia',           nome: 'Moradia',                 cor: '#84cc16', codigo: '2.1', subcats: ['Aluguel','Condomínio','Internet','Água (Semae)','Energia Elétrica','Gás','Outros'] },
-          { id: 'transp_fixo',       nome: 'Transporte Fixo',         cor: '#65a30d', codigo: '2.2', subcats: ['IPVA / Licenciamento','Seguro do Veículo','Financiamento Veículo'] },
-          { id: 'assinaturas',       nome: 'Assinaturas',             cor: '#6366f1', codigo: '2.3', subcats: ['Telefone','Streaming','Google','Apps','Outros'] },
-          { id: 'faculdade',         nome: 'Faculdade',               cor: '#8b5cf6', codigo: '2.4', subcats: ['Mensalidade Estácio','Material'] },
-          { id: 'igreja',            nome: 'Igreja',                  cor: '#ec4899', codigo: '2.5', subcats: ['Dízimo','Oferta','Eventos'] },
-          { id: 'alimentacao',       nome: 'Alimentação',             cor: '#f59e0b', codigo: '3.1', subcats: ['Mercado','Delivery','Restaurante','Outros'] },
-          { id: 'transp_variavel',   nome: 'Transporte Variável',     cor: '#d97706', codigo: '3.2', subcats: ['Combustível Carro','Combustível Moto','Manutenção Carro','Manutenção Moto','Pneus','Uber','Estacionamento','Multa'] },
-          { id: 'saude_corpo',       nome: 'Saúde & Corpo',           cor: '#2dd4bf', codigo: '3.3', subcats: ['Academia','Muay thai','Suplemento','Convênio','Nutricionista','Psicólogo','Quiropraxia','Remédio','Equipamentos','Outros'] },
-          { id: 'cuidado_pessoal',   nome: 'Cuidado Pessoal',         cor: '#f43f5e', codigo: '3.4', subcats: ['Barbearia','Cosméticos','Outros'] },
-          { id: 'formacao',          nome: 'Formação',                cor: '#a855f7', codigo: '3.5', subcats: ['Cursos','Livros','Mentoria','Outros'] },
-          { id: 'lazer',             nome: 'Lazer',                   cor: '#14b8a6', codigo: '3.6', subcats: ['Cinema','Rolê / Social','Viagem','Entretenimento','Conferências','Outros'] },
-          { id: 'compras',           nome: 'Compras',                 cor: '#fb923c', codigo: '4.1', subcats: ['Vestuário','Eletrônico','Eletrodoméstico','Móvel','Utilitários','Outros'] },
-          { id: 'presentes',         nome: 'Presentes & Datas',       cor: '#f87171', codigo: '4.2', subcats: ['Aniversário','Celebrações','Outros'] },
-          { id: 'inv_renda_fixa',    nome: 'Renda Fixa',              cor: '#0d9488', codigo: '5.1', subcats: ['CDB','LCI / LCA','Tesouro Direto'] },
-          { id: 'inv_renda_var',     nome: 'Renda Variável',          cor: '#0f766e', codigo: '5.2', subcats: ['Ações','FIIs','ETFs','BDRs'] },
-          { id: 'inv_reservas',      nome: 'Reservas',                cor: '#115e59', codigo: '5.3', subcats: ['Reserva de Emergência','Reserva de Oportunidade'] },
-          { id: 'inv_negocio',       nome: 'Negócio',                 cor: '#134e4a', codigo: '5.4', subcats: ['Aporte Projeto IA','Ferramentas / Infraestrutura'] },
-          { id: 'inv_objetivos',     nome: 'Objetivos Futuros',       cor: '#4f9cf9', codigo: '5.5', subcats: ['Poupança Casamento','Fundo Imóvel'] },
-          { id: 'outros',            nome: 'Outros',                  cor: '#94a3b8', codigo: '9.9', subcats: [] },
+          { id: 'rec_trabalho', natureza: 'receita',      nome: 'Trabalho Fixo',           cor: '#16a34a', codigo: '1.1', subcats: ['Salário Mar&Rio','Comissões'] },
+          { id: 'rec_servicos', natureza: 'receita',      nome: 'Prestação de Serviços',   cor: '#15803d', codigo: '1.2', subcats: ['Clínica de Fisioterapia','BPO Financeiro','Consultoria Contábil','Outros'] },
+          { id: 'rec_projeto_ia', natureza: 'receita',    nome: 'Projeto IA / Automação',  cor: '#166534', codigo: '1.3', subcats: ['Receita Operacional','Participação Societária'] },
+          { id: 'rec_investimentos', natureza: 'receita', nome: 'Rendimentos',             cor: '#14532d', codigo: '1.4', subcats: ['Dividendos','Juros / Renda Fixa','CDB / LCI / LCA','Outros'] },
+          { id: 'rec_eventual', natureza: 'receita',      nome: 'Eventual',                cor: '#4ade80', codigo: '1.5', subcats: ['Venda de Bens','Outros'] },
+          { id: 'moradia', natureza: 'despesa',           nome: 'Moradia',                 cor: '#84cc16', codigo: '2.1', subcats: ['Aluguel','Condomínio','Internet','Água (Semae)','Energia Elétrica','Gás','Outros'] },
+          { id: 'transp_fixo', natureza: 'despesa',       nome: 'Transporte Fixo',         cor: '#65a30d', codigo: '2.2', subcats: ['IPVA / Licenciamento','Seguro do Veículo','Financiamento Veículo'] },
+          { id: 'assinaturas', natureza: 'despesa',       nome: 'Assinaturas',             cor: '#6366f1', codigo: '2.3', subcats: ['Telefone','Streaming','Google','Apps','Outros'] },
+          { id: 'faculdade', natureza: 'despesa',         nome: 'Faculdade',               cor: '#8b5cf6', codigo: '2.4', subcats: ['Mensalidade Estácio','Material'] },
+          { id: 'igreja', natureza: 'despesa',            nome: 'Igreja',                  cor: '#ec4899', codigo: '2.5', subcats: ['Dízimo','Oferta','Eventos'] },
+          { id: 'alimentacao', natureza: 'despesa',       nome: 'Alimentação',             cor: '#f59e0b', codigo: '3.1', subcats: ['Mercado','Delivery','Restaurante','Outros'] },
+          { id: 'transp_variavel', natureza: 'despesa',   nome: 'Transporte Variável',     cor: '#d97706', codigo: '3.2', subcats: ['Combustível Carro','Combustível Moto','Manutenção Carro','Manutenção Moto','Pneus','Uber','Estacionamento','Multa'] },
+          { id: 'saude_corpo', natureza: 'despesa',       nome: 'Saúde & Corpo',           cor: '#2dd4bf', codigo: '3.3', subcats: ['Academia','Muay thai','Suplemento','Convênio','Nutricionista','Psicólogo','Quiropraxia','Remédio','Equipamentos','Outros'] },
+          { id: 'cuidado_pessoal', natureza: 'despesa',   nome: 'Cuidado Pessoal',         cor: '#f43f5e', codigo: '3.4', subcats: ['Barbearia','Cosméticos','Outros'] },
+          { id: 'formacao', natureza: 'despesa',          nome: 'Formação',                cor: '#a855f7', codigo: '3.5', subcats: ['Cursos','Livros','Mentoria','Outros'] },
+          { id: 'lazer', natureza: 'despesa',             nome: 'Lazer',                   cor: '#14b8a6', codigo: '3.6', subcats: ['Cinema','Rolê / Social','Viagem','Entretenimento','Conferências','Outros'] },
+          { id: 'compras', natureza: 'despesa',           nome: 'Compras',                 cor: '#fb923c', codigo: '4.1', subcats: ['Vestuário','Eletrônico','Eletrodoméstico','Móvel','Utilitários','Outros'] },
+          { id: 'presentes', natureza: 'despesa',         nome: 'Presentes & Datas',       cor: '#f87171', codigo: '4.2', subcats: ['Aniversário','Celebrações','Outros'] },
+          { id: 'inv_renda_fixa', natureza: 'investimento',    nome: 'Renda Fixa',              cor: '#0d9488', codigo: '5.1', subcats: ['CDB','LCI / LCA','Tesouro Direto'] },
+          { id: 'inv_renda_var', natureza: 'investimento',     nome: 'Renda Variável',          cor: '#0f766e', codigo: '5.2', subcats: ['Ações','FIIs','ETFs','BDRs'] },
+          { id: 'inv_reservas', natureza: 'investimento',      nome: 'Reservas',                cor: '#115e59', codigo: '5.3', subcats: ['Reserva de Emergência','Reserva de Oportunidade'] },
+          { id: 'inv_negocio', natureza: 'investimento',       nome: 'Negócio',                 cor: '#134e4a', codigo: '5.4', subcats: ['Aporte Projeto IA','Ferramentas / Infraestrutura'] },
+          { id: 'inv_objetivos', natureza: 'investimento',     nome: 'Objetivos Futuros',       cor: '#4f9cf9', codigo: '5.5', subcats: ['Poupança Casamento','Fundo Imóvel'] },
+          { id: 'outros', natureza: 'todas',            nome: 'Outros',                  cor: '#94a3b8', codigo: '9.9', subcats: [] },
         ];
         // Preserva subcats customizadas que o usuário possa ter adicionado
         DB.categorias = planoNovo.map(nova => {
@@ -157,6 +157,21 @@ function carregarDB() {
           console.log('Migração v2 concluída');
         }
       }
+      // Migração v4 — adiciona campo natureza nas categorias salvas
+      if (!parsed.migradoV4) {
+        const receitasIds = ['rec_trabalho','rec_servicos','rec_projeto_ia','rec_investimentos','rec_eventual'];
+        const investIds = ['inv_renda_fixa','inv_renda_var','inv_reservas','inv_negocio','inv_objetivos'];
+        DB.categorias.forEach(c => {
+          if (c.natureza) return; // já tem
+          if (c.id === 'outros') c.natureza = 'todas';
+          else if (receitasIds.includes(c.id) || c.id.startsWith('rec_')) c.natureza = 'receita';
+          else if (investIds.includes(c.id) || c.id.startsWith('inv_')) c.natureza = 'investimento';
+          else c.natureza = 'despesa';
+        });
+        DB.migradoV4 = true;
+        salvarDB();
+        console.log('Migração v4 — natureza das categorias definida');
+      }
     } catch(e) { console.error('Erro ao carregar DB', e); }
   }
 }
@@ -171,12 +186,12 @@ function showPage(id) {
     const pg = document.getElementById('page-' + id);
     if (pg) pg.classList.add('active');
 
-    const navMap = { dashboard:0, lancamentos:1, previsao:2, importar:3, dre:4, planocontas:5, patrimonio:6, configuracoes:7 };
+    const navMap = { dashboard:0, lancamentos:1, previsao:2, dre:3, planocontas:4, patrimonio:5, importar:6, configuracoes:7 };
     const items = document.querySelectorAll('.nav-item');
     if (items[navMap[id]]) items[navMap[id]].classList.add('active');
 
     const titles = {
-      dashboard:'Dashboard', lancamentos:'Lançamentos', previsao:'Previsão', importar:'Importar',
+      dashboard:'Dashboard', lancamentos:'Lançamentos', previsao:'Previsão', importar:'Conferência Mensal',
       dre:'DRE', planocontas:'Plano de Contas', patrimonio:'Patrimônio',
       configuracoes:'Configurações'
     };
@@ -1327,6 +1342,7 @@ function salvarImportacao() {
 function salvarManual(e) {
   e.preventDefault();
   const catId = document.getElementById('manual-categoria').value;
+  if (!catId) { toast('Selecione uma categoria'); return; }
   DB.lancamentos.push({
     id: gerarId(),
     data: document.getElementById('manual-data').value,
@@ -1339,11 +1355,12 @@ function salvarManual(e) {
     status: 'validado'
   });
   salvarDB();
-  // Limpa seletor de tags manualmente após reset
   renderSeletorTags('manual-tags-seletor', []);
   e.target.reset();
+  fecharModal('modal-lancamento');
   atualizarBannerValidacao(); renderDashboard();
-  toast('Lançamento salvo!');
+  try { renderLancamentos(); } catch(err) {}
+  toast('Lançamento salvo! ✓');
 }
 
 function atualizarSubcatManual() {
@@ -1422,6 +1439,14 @@ function renderPlanoContas() {
               'title="Editar nome" ' +
               'onblur="salvarNomeCategoria(\''+cat.id+'\',this.value)" ' +
               'onkeydown="if(event.key===\'Enter\')this.blur()">' +
+            // Natureza (receita/despesa/investimento)
+            (cat.id !== 'outros'
+              ? '<select style="font-size:10px;padding:2px 4px;border-radius:6px;border:0.5px solid var(--border-light);background:var(--card);color:var(--text2);cursor:pointer" title="Natureza da categoria" onchange="salvarNaturezaCategoria(\''+cat.id+'\',this.value)">' +
+                  '<option value="despesa"'+((cat.natureza||'despesa')==='despesa'?' selected':'')+'>Despesa</option>' +
+                  '<option value="receita"'+(cat.natureza==='receita'?' selected':'')+'>Receita</option>' +
+                  '<option value="investimento"'+(cat.natureza==='investimento'?' selected':'')+'>Investim.</option>' +
+                '</select>'
+              : '') +
           '</div>' +
           '<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">' +
             // Reordenar categoria
@@ -1555,11 +1580,20 @@ function excluirSubcat(catId, nome) {
   toast('Subcategoria removida');
 }
 
+function salvarNaturezaCategoria(catId, natureza) {
+  const cat = DB.categorias.find(c => c.id === catId);
+  if (!cat) return;
+  cat.natureza = natureza;
+  salvarDB(); preencherSelects();
+  toast('Natureza atualizada!');
+}
+
 function abrirModalCategoria() {
   document.getElementById('edit-cat-id').value = '';
   document.getElementById('edit-cat-nome').value = '';
   document.getElementById('edit-cat-codigo').value = '';
   document.getElementById('edit-cat-cor').value = '#4f9cf9';
+  document.getElementById('edit-cat-natureza').value = 'despesa';
   document.getElementById('modal-edit-cat').style.display = 'flex';
 }
 
@@ -1567,9 +1601,10 @@ function salvarNovaOuEditadaCategoria() {
   const nome = document.getElementById('edit-cat-nome').value.trim();
   const codigo = document.getElementById('edit-cat-codigo').value.trim();
   const cor = document.getElementById('edit-cat-cor').value;
+  const natureza = document.getElementById('edit-cat-natureza').value;
   if (!nome) { toast('Informe o nome'); return; }
   const id = nome.toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'') + '_' + Date.now().toString(36);
-  DB.categorias.push({ id, nome, cor, codigo, subcats: [] });
+  DB.categorias.push({ id, nome, cor, codigo, natureza, subcats: [] });
   salvarDB(); fecharModal('modal-edit-cat'); preencherSelects(); renderPlanoContas();
   toast('Categoria criada!');
 }
@@ -1875,12 +1910,11 @@ function aplicarConciliacao(previewLanc, match) {
 // ========================
 // Mapeamento de tipo para IDs de categoria
 function getCategoriasPorTipo(tipo) {
-  const receitas = ['rec_trabalho','rec_servicos','rec_projeto_ia','rec_investimentos','rec_eventual'];
-  const investimentos = ['inv_renda_fixa','inv_renda_var','inv_reservas','inv_negocio','inv_objetivos'];
-  const despesas = DB.categorias.map(c => c.id).filter(id => !receitas.includes(id) && !investimentos.includes(id) && id !== 'outros');
-  if (tipo === 'receita') return [...receitas, 'outros'];
-  if (tipo === 'investimento' || tipo === 'interno') return [...investimentos, 'outros'];
-  if (tipo === 'despesa') return [...despesas, 'outros'];
+  // Filtra pelo campo natureza de cada categoria (não mais por lista fixa de IDs)
+  const getNat = c => c.natureza || (c.id === 'outros' ? 'todas' : c.id.startsWith('rec_') ? 'receita' : c.id.startsWith('inv_') ? 'investimento' : 'despesa');
+  if (tipo === 'receita') return DB.categorias.filter(c => { const n = getNat(c); return n === 'receita' || n === 'todas'; }).map(c => c.id);
+  if (tipo === 'investimento' || tipo === 'interno') return DB.categorias.filter(c => { const n = getNat(c); return n === 'investimento' || n === 'todas'; }).map(c => c.id);
+  if (tipo === 'despesa') return DB.categorias.filter(c => { const n = getNat(c); return n === 'despesa' || n === 'todas'; }).map(c => c.id);
   return DB.categorias.map(c => c.id);
 }
 
@@ -1959,6 +1993,13 @@ function limparDados() {
 }
 
 function abrirModalLancamento() {
-  showPage('importar');
-  switchTab('manual', document.querySelectorAll('.tab')[2]);
+  // Pré-preenche data de hoje e prepara selects
+  document.getElementById('manual-data').value = new Date().toISOString().slice(0, 10);
+  const tipoAtual = document.getElementById('manual-tipo').value || 'despesa';
+  preencherSelectCategoriaPorTipo('manual-categoria', tipoAtual, '');
+  atualizarSubcatManual();
+  renderSeletorTags('manual-tags-seletor', []);
+  document.getElementById('modal-lancamento').style.display = 'flex';
+  // Foco no valor para lançamento rápido
+  setTimeout(() => document.getElementById('manual-valor').focus(), 100);
 }
