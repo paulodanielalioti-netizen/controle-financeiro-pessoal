@@ -500,6 +500,7 @@ function renderLancamentos() {
     const subcatStr = l.subcategoria ? ' › ' + l.subcategoria : '';
     const tagsStr = (l.tags||[]).map(t=>'<span class="tag-pill">'+t+'</span>').join('');
     tbody.innerHTML += '<tr' + (emAberto ? ' style="background:#fffdf0"' : '') + '>' +
+      '<td style="width:30px;text-align:center"><input type="checkbox" class="lanc-check" data-id="' + l.id + '" onchange="atualizarBarraLote()" style="width:14px;height:14px;cursor:pointer"></td>' +
       '<td>' + formatarData(l.data) + '</td>' +
       '<td>' + l.descricao + fpgto + (tagsStr ? '<br><span style="margin-top:2px;display:flex;gap:4px">' + tagsStr + '</span>' : '') + '</td>' +
       '<td>' + (isInterno ? '<span class="tag-interno">Interno</span>' : getNomeCat(l.categoria) + subcatStr) + '</td>' +
@@ -513,6 +514,90 @@ function renderLancamentos() {
       '</td>' +
     '</tr>';
   });
+  atualizarBarraLote();
+}
+
+// ========================
+// AÇÕES EM LOTE
+// ========================
+function getSelecionadosLote() {
+  return [...document.querySelectorAll('.lanc-check:checked')].map(cb => cb.dataset.id);
+}
+
+function selecionarTodosLanc(checked) {
+  document.querySelectorAll('.lanc-check').forEach(cb => cb.checked = checked);
+  atualizarBarraLote();
+}
+
+function atualizarBarraLote() {
+  const barra = document.getElementById('barra-lote');
+  if (!barra) return;
+  const n = getSelecionadosLote().length;
+  barra.style.display = n > 0 ? 'flex' : 'none';
+  const contador = document.getElementById('lote-contador');
+  if (contador) contador.textContent = n + ' selecionado' + (n > 1 ? 's' : '');
+}
+
+function darBaixaLote() {
+  const ids = getSelecionadosLote();
+  if (!ids.length) return;
+  let baixados = 0;
+  ids.forEach(id => { if (baixarDireto(id)) baixados++; });
+  salvarDB();
+  renderLancamentos();
+  renderDashboard();
+  toast('✓ ' + baixados + ' lançamento(s) baixado(s)' + (baixados < ids.length ? ' (' + (ids.length - baixados) + ' já estavam pagos)' : ''));
+}
+
+function excluirLote() {
+  const ids = getSelecionadosLote();
+  if (!ids.length) return;
+  if (!confirm('Excluir ' + ids.length + ' lançamento(s)? Essa ação não pode ser desfeita.')) return;
+  DB.lancamentos = DB.lancamentos.filter(l => !ids.includes(l.id));
+  salvarDB();
+  renderLancamentos();
+  renderDashboard();
+  toast(ids.length + ' lançamento(s) excluído(s)');
+}
+
+function abrirAlterarLote() {
+  const ids = getSelecionadosLote();
+  if (!ids.length) return;
+  document.getElementById('lote-alterar-info').textContent = 'Alterando ' + ids.length + ' lançamento(s). Só os campos preenchidos serão aplicados.';
+  // Preenche select de categorias com todas
+  const sel = document.getElementById('lote-categoria');
+  sel.innerHTML = '<option value="">— não alterar —</option>' + DB.categorias.map(c => '<option value="' + c.id + '">' + c.nome + '</option>').join('');
+  document.getElementById('lote-subcategoria').innerHTML = '<option value="">— não alterar —</option>';
+  document.getElementById('lote-forma-pagamento').value = '';
+  document.getElementById('modal-lote').style.display = 'flex';
+}
+
+function atualizarSubcatLote() {
+  const catId = document.getElementById('lote-categoria').value;
+  const sel = document.getElementById('lote-subcategoria');
+  if (!catId) { sel.innerHTML = '<option value="">— não alterar —</option>'; return; }
+  const subcats = getSubcats(catId);
+  sel.innerHTML = '<option value="">— sem subcategoria —</option>' + subcats.map(s => '<option value="' + s + '">' + s + '</option>').join('');
+}
+
+function salvarAlterarLote() {
+  const ids = getSelecionadosLote();
+  const cat = document.getElementById('lote-categoria').value;
+  const subcat = document.getElementById('lote-subcategoria').value;
+  const fpgto = document.getElementById('lote-forma-pagamento').value;
+  if (!cat && !fpgto) { toast('Preencha ao menos um campo para alterar'); return; }
+  let alterados = 0;
+  DB.lancamentos.forEach(l => {
+    if (!ids.includes(l.id)) return;
+    if (cat) { l.categoria = cat; l.subcategoria = subcat || ''; }
+    if (fpgto) l.formaPagamento = fpgto;
+    alterados++;
+  });
+  salvarDB();
+  fecharModal('modal-lote');
+  renderLancamentos();
+  renderDashboard();
+  toast('✓ ' + alterados + ' lançamento(s) alterado(s)');
 }
 
 
@@ -582,7 +667,25 @@ function abrirEditar(id) {
   renderSeletorTags('editar-tags-seletor', l.tags || []);
   document.getElementById('editar-forma-pagamento').value = l.formaPagamento || '';
   document.getElementById('editar-situacao').value = l.situacao || 'pago';
+  // Escopo de grupo (repetição/parcelamento)
+  const escopoDiv = document.getElementById('editar-escopo-grupo');
+  if (escopoDiv) {
+    escopoDiv.style.display = l.grupoId ? 'block' : 'none';
+    const escopoSel = document.getElementById('editar-escopo');
+    if (escopoSel) escopoSel.value = 'este';
+  }
   document.getElementById('modal-editar').style.display = 'flex';
+}
+
+// Extrai a descrição base sem o sufixo de parcela "(2/10)"
+function descricaoBase(desc) {
+  return desc.replace(/\s*\(\d+\/\d+\)\s*$/, '');
+}
+
+// Extrai o sufixo de parcela, se existir
+function sufixoParcela(desc) {
+  const m = desc.match(/\s*(\(\d+\/\d+\))\s*$/);
+  return m ? ' ' + m[1] : '';
 }
 
 function atualizarSubcatEditar(catId, valorAtual) {
@@ -607,9 +710,33 @@ function salvarEdicao() {
   l.formaPagamento = document.getElementById('editar-forma-pagamento').value;
   l.situacao = document.getElementById('editar-situacao').value;
   l.status = 'validado';
+
+  // Propagação para o grupo (repetição/parcelamento)
+  let propagados = 0;
+  const escopo = l.grupoId ? (document.getElementById('editar-escopo')?.value || 'este') : 'este';
+  if (l.grupoId && escopo !== 'este') {
+    const base = descricaoBase(l.descricao);
+    const irmaos = DB.lancamentos.filter(x =>
+      x.grupoId === l.grupoId && x.id !== l.id &&
+      (escopo === 'todos' || x.data >= l.data)
+    );
+    irmaos.forEach(x => {
+      // Propaga: descrição base (preservando sufixo de parcela), valor, categoria, subcat, tipo, forma pgto, tags
+      x.descricao = base + sufixoParcela(x.descricao);
+      x.valor = l.valor;
+      x.categoria = l.categoria;
+      x.subcategoria = l.subcategoria;
+      x.tipo = l.tipo;
+      x.formaPagamento = l.formaPagamento;
+      x.tags = [...l.tags];
+      // Data e situação NUNCA propagam — cada parcela tem a sua
+      propagados++;
+    });
+  }
+
   if (l.categoria !== catAntiga) verificarESalvarRegra(l.descricao, l);
   salvarDB(); fecharModal('modal-editar'); renderLancamentos(); renderDashboard();
-  toast('Lançamento atualizado!');
+  toast('Lançamento atualizado!' + (propagados ? ' Alteração aplicada a mais ' + propagados + ' do grupo.' : ''));
 }
 
 function atualizarBannerValidacao() {
@@ -1830,11 +1957,42 @@ function darBaixaLancamento(id) {
   const l = DB.lancamentos.find(x => x.id === id);
   if (!l) return;
   if ((l.situacao || 'pago') === 'pago') { toast('Este lançamento já está pago'); return; }
+  // Abre modal de confirmação com dados cadastrados para validar
+  document.getElementById('baixa-id').value = l.id;
+  document.getElementById('baixa-descricao').textContent = l.descricao;
+  document.getElementById('baixa-info').textContent = getNomeCat(l.categoria) + (l.subcategoria ? ' › ' + l.subcategoria : '') + ' · vencimento ' + formatarData(l.data);
+  // Data sugerida: hoje (data real do pagamento)
+  document.getElementById('baixa-data').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('baixa-valor').value = l.valor;
+  document.getElementById('baixa-forma-pagamento').value = l.formaPagamento || '';
+  document.getElementById('modal-baixa').style.display = 'flex';
+}
+
+function confirmarBaixa() {
+  const id = document.getElementById('baixa-id').value;
+  const l = DB.lancamentos.find(x => x.id === id);
+  if (!l) return;
+  const novaData = document.getElementById('baixa-data').value;
+  const novoValor = parseFloat(document.getElementById('baixa-valor').value);
+  if (!novaData) { toast('Informe a data do pagamento'); return; }
+  if (isNaN(novoValor) || novoValor <= 0) { toast('Informe um valor válido'); return; }
+  l.data = novaData;
+  l.valor = novoValor;
+  l.formaPagamento = document.getElementById('baixa-forma-pagamento').value;
   l.situacao = 'pago';
   salvarDB();
+  fecharModal('modal-baixa');
   try { renderLancamentos(); } catch(e) {}
   renderDashboard();
   toast('✓ Baixa realizada — "' + l.descricao + '"');
+}
+
+// Baixa direta sem confirmação (usada no lote)
+function baixarDireto(id) {
+  const l = DB.lancamentos.find(x => x.id === id);
+  if (!l || (l.situacao || 'pago') === 'pago') return false;
+  l.situacao = 'pago';
+  return true;
 }
 
 function reabrirLancamento(id) {
