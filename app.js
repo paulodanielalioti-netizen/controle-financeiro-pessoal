@@ -172,6 +172,28 @@ function carregarDB() {
         salvarDB();
         console.log('Migração v4 — natureza das categorias definida');
       }
+      // Migração v5 — unificação: previstos viram lançamentos em aberto; todo lançamento ganha situação
+      if (!parsed.migradoV5) {
+        // 1. Lançamentos existentes: tudo que já está no sistema é fato consumado = pago
+        DB.lancamentos.forEach(l => { if (!l.situacao) l.situacao = 'pago'; });
+        // 2. Previstos viram lançamentos em aberto no mês atual (se ainda não baixados)
+        const mesHoje = new Date().toISOString().slice(0, 7);
+        (DB.previstos || []).forEach(p => {
+          const jaBaixado = DB.lancamentos.some(l => l.previstoId === p.id && l.data.slice(0, 7) === mesHoje);
+          if (jaBaixado) return;
+          const dia = p.dia ? String(Math.min(p.dia, 28)).padStart(2, '0') : '01';
+          DB.lancamentos.push({
+            id: gerarId(), data: mesHoje + '-' + dia, descricao: p.descricao,
+            valor: p.valor, tipo: p.tipo, categoria: p.categoria,
+            subcategoria: p.subcategoria || '', tags: [], status: 'validado',
+            situacao: 'aberto', formaPagamento: ''
+          });
+        });
+        DB.previstos = [];
+        DB.migradoV5 = true;
+        salvarDB();
+        console.log('Migração v5 — modelo unificado com situação');
+      }
     } catch(e) { console.error('Erro ao carregar DB', e); }
   }
 }
@@ -186,12 +208,12 @@ function showPage(id) {
     const pg = document.getElementById('page-' + id);
     if (pg) pg.classList.add('active');
 
-    const navMap = { dashboard:0, lancamentos:1, previsao:2, dre:3, planocontas:4, patrimonio:5, importar:6, configuracoes:7 };
+    const navMap = { dashboard:0, lancamentos:1, dre:2, planocontas:3, patrimonio:4, importar:5, configuracoes:6 };
     const items = document.querySelectorAll('.nav-item');
     if (items[navMap[id]]) items[navMap[id]].classList.add('active');
 
     const titles = {
-      dashboard:'Dashboard', lancamentos:'Lançamentos', previsao:'Previsão', importar:'Conferência Mensal',
+      dashboard:'Dashboard', lancamentos:'Lançamentos', importar:'Conferência Mensal',
       dre:'DRE', planocontas:'Plano de Contas', patrimonio:'Patrimônio',
       configuracoes:'Configurações'
     };
@@ -200,7 +222,6 @@ function showPage(id) {
 
     if (id === 'dashboard') renderDashboard();
     if (id === 'lancamentos') renderLancamentos();
-    if (id === 'previsao') renderPrevisao();
     if (id === 'dre') { try { preencherDREmeses(); renderDRE(); } catch(e) { console.error('DRE:', e); } }
     if (id === 'planocontas') { renderPlanoContas(); renderRegras(); }
     if (id === 'patrimonio') renderPatrimonio();
@@ -291,16 +312,21 @@ function renderDashboard() {
   preencherSeletorTagDashboard();
 
   const lancsMes = getMes(mesAtual);
-  const receitas = lancsMes.filter(l => l.tipo === 'receita').reduce((a, b) => a + b.valor, 0);
-  const despesas = lancsMes.filter(l => l.tipo === 'despesa').reduce((a, b) => a + b.valor, 0);
-  const sobra = receitas - despesas;
+  const isPago = l => (l.situacao || 'pago') === 'pago';
+  // Entrou/Saiu = regime de caixa (só o que já foi pago)
+  const receitas = lancsMes.filter(l => l.tipo === 'receita' && isPago(l)).reduce((a, b) => a + b.valor, 0);
+  const despesas = lancsMes.filter(l => l.tipo === 'despesa' && isPago(l)).reduce((a, b) => a + b.valor, 0);
+  // Fechamento projetado = pagos + em abertos do mês
+  const recAberto = lancsMes.filter(l => l.tipo === 'receita' && !isPago(l)).reduce((a, b) => a + b.valor, 0);
+  const despAberto = lancsMes.filter(l => l.tipo === 'despesa' && !isPago(l)).reduce((a, b) => a + b.valor, 0);
+  const sobra = (receitas + recAberto) - (despesas + despAberto);
 
   const d = new Date(mesAtual + '-01');
   d.setMonth(d.getMonth() - 1);
   const mesAnt = d.toISOString().slice(0, 7);
   const laMes = getMes(mesAnt);
-  const recAnt = laMes.filter(l => l.tipo === 'receita').reduce((a, b) => a + b.valor, 0);
-  const despAnt = laMes.filter(l => l.tipo === 'despesa').reduce((a, b) => a + b.valor, 0);
+  const recAnt = laMes.filter(l => l.tipo === 'receita' && isPago(l)).reduce((a, b) => a + b.valor, 0);
+  const despAnt = laMes.filter(l => l.tipo === 'despesa' && isPago(l)).reduce((a, b) => a + b.valor, 0);
 
   document.getElementById('m-receitas').textContent = fmt(receitas);
   document.getElementById('m-despesas').textContent = fmt(despesas);
@@ -369,40 +395,23 @@ function renderDashboard() {
 
   // ===== PROJEÇÃO DO MÊS (previsibilidade) =====
   const cardProj = document.getElementById('card-projecao');
-  const temPrevisao = (DB.previstos && DB.previstos.length) || Object.keys(DB.orcamentos).length;
+  const emAbertoMes = lancsMes.filter(l => (l.situacao || 'pago') === 'aberto').sort((a, b) => a.data.localeCompare(b.data));
   if (cardProj) {
-    if (temPrevisao && !dashTag) {
+    if (emAbertoMes.length && !dashTag) {
       cardProj.style.display = 'block';
-      const receitaPrev = (DB.previstos || []).filter(p => p.tipo === 'receita').reduce((a, b) => a + b.valor, 0);
-      const despesaPrevLanc = (DB.previstos || []).filter(p => p.tipo === 'despesa').reduce((a, b) => a + b.valor, 0);
-      // Despesa prevista = maior entre previstos recorrentes e soma de orçamentos
-      const despesaPrevOrc = Object.values(DB.orcamentos).reduce((a, b) => a + b, 0);
-      const despesaPrev = Math.max(despesaPrevLanc, despesaPrevOrc);
-
-      document.getElementById('proj-receita-real').textContent = fmt(receitas);
-      document.getElementById('proj-receita-prev').textContent = fmt(receitaPrev);
-      document.getElementById('proj-despesa-real').textContent = fmt(despesas);
-      document.getElementById('proj-despesa-prev').textContent = fmt(despesaPrev);
-
-      const pctRec = receitaPrev > 0 ? Math.min((receitas / receitaPrev) * 100, 100) : 0;
-      const pctDesp = despesaPrev > 0 ? Math.min((despesas / despesaPrev) * 100, 100) : 0;
-      document.getElementById('proj-receita-bar').style.width = pctRec + '%';
-      document.getElementById('proj-despesa-bar').style.width = pctDesp + '%';
-      document.getElementById('proj-despesa-bar').style.background = despesas > despesaPrev && despesaPrev > 0 ? '#b91c1c' : '#dc2626';
-
-      // Projeção: usa o maior entre realizado e previsto para estimar fechamento
-      const receitaProjetada = Math.max(receitas, receitaPrev);
-      const despesaProjetada = Math.max(despesas, despesaPrev);
-      const fechamento = receitaProjetada - despesaProjetada;
-      const elFech = document.getElementById('proj-fechamento');
-      const elStatus = document.getElementById('proj-status');
-      elFech.textContent = (fechamento < 0 ? '- ' : '') + fmt(fechamento);
-      elFech.style.color = fechamento >= 0 ? 'var(--green)' : 'var(--red)';
-      if (fechamento >= 0) {
-        elStatus.innerHTML = '<span style="color:var(--green)">✓ No ritmo atual, você fecha com sobra</span>';
-      } else {
-        elStatus.innerHTML = '<span style="color:var(--red)">⚠ No ritmo atual, você fecha no vermelho</span>';
-      }
+      const lista = document.getElementById('lista-em-aberto');
+      lista.innerHTML = emAbertoMes.map(l => {
+        const amtClass = l.tipo === 'receita' ? 'pos' : l.tipo === 'interno' ? 'neu' : 'neg';
+        const amtPrefix = l.tipo === 'receita' ? '+ ' : l.tipo === 'interno' ? '' : '- ';
+        return '<div class="tx-item">' +
+          '<div class="tx-icon" style="background:#fef9c3"><i class="ti ti-clock" style="color:#a16207"></i></div>' +
+          '<div class="tx-info"><div class="tx-name">' + l.descricao + '</div>' +
+          '<div class="tx-cat">' + getNomeCat(l.categoria) + ' · vence ' + formatarData(l.data) + '</div></div>' +
+          '<div class="tx-right" style="display:flex;align-items:center;gap:10px">' +
+            '<div><div class="tx-amount ' + amtClass + '">' + amtPrefix + fmt(l.valor) + '</div></div>' +
+            '<button class="btn" style="font-size:11px;padding:4px 10px;color:#16a34a;border-color:#86efac" onclick="darBaixaLancamento(\'' + l.id + '\')"><i class="ti ti-check"></i> Dar baixa</button>' +
+          '</div></div>';
+      }).join('');
     } else {
       cardProj.style.display = 'none';
     }
@@ -465,6 +474,8 @@ function renderLancamentos() {
   if (tipo) lista = lista.filter(l => l.tipo === tipo);
   if (cat) lista = lista.filter(l => l.categoria === cat);
   if (tag) lista = lista.filter(l => (l.tags || []).includes(tag));
+  const situacaoFiltro = document.getElementById('filtro-situacao')?.value || '';
+  if (situacaoFiltro) lista = lista.filter(l => (l.situacao || 'pago') === situacaoFiltro);
 
   const tbody = document.getElementById('tbody-lancamentos');
   tbody.innerHTML = '';
@@ -472,24 +483,31 @@ function renderLancamentos() {
     tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:24px">Nenhum lançamento encontrado</td></tr>';
     return;
   }
+  const nomesFormaPgto = { credito: 'Crédito', debito: 'Débito', pix: 'Pix', dinheiro: 'Dinheiro', transferencia: 'Transf.', boleto: 'Boleto' };
   lista.forEach(l => {
     const isInterno = l.tipo === 'interno';
     const badge = l.status === 'pendente'
       ? '<span class="tx-badge badge-pendente">revisar</span>'
       : isInterno ? '<span class="tx-badge badge-interno">interno</span>'
       : '<span class="tx-badge badge-validado">validado</span>';
+    const emAberto = (l.situacao || 'pago') === 'aberto';
+    const badgeSituacao = emAberto
+      ? '<span class="tx-badge" style="background:#fef9c3;color:#a16207">○ Em aberto</span>'
+      : '<span class="tx-badge" style="background:#dcfce7;color:#166534">✓ Pago</span>';
+    const fpgto = l.formaPagamento ? '<span style="font-size:10px;color:var(--text3)"> · ' + (nomesFormaPgto[l.formaPagamento] || l.formaPagamento) + '</span>' : '';
     const amtClass = isInterno ? 'neu' : l.tipo === 'receita' ? 'pos' : 'neg';
     const amtPrefix = isInterno ? '' : l.tipo === 'receita' ? '+' : '-';
     const subcatStr = l.subcategoria ? ' › ' + l.subcategoria : '';
     const tagsStr = (l.tags||[]).map(t=>'<span class="tag-pill">'+t+'</span>').join('');
-    tbody.innerHTML += '<tr>' +
+    tbody.innerHTML += '<tr' + (emAberto ? ' style="background:#fffdf0"' : '') + '>' +
       '<td>' + formatarData(l.data) + '</td>' +
-      '<td>' + l.descricao + (tagsStr ? '<br><span style="margin-top:2px;display:flex;gap:4px">' + tagsStr + '</span>' : '') + '</td>' +
+      '<td>' + l.descricao + fpgto + (tagsStr ? '<br><span style="margin-top:2px;display:flex;gap:4px">' + tagsStr + '</span>' : '') + '</td>' +
       '<td>' + (isInterno ? '<span class="tag-interno">Interno</span>' : getNomeCat(l.categoria) + subcatStr) + '</td>' +
       '<td><span style="text-transform:capitalize">' + l.tipo + '</span></td>' +
       '<td class="tx-amount ' + amtClass + '">' + amtPrefix + ' ' + fmt(l.valor) + '</td>' +
-      '<td>' + badge + '</td>' +
+      '<td>' + badgeSituacao + ' ' + badge + '</td>' +
       '<td>' +
+        (emAberto ? '<button class="btn" style="font-size:11px;padding:4px 8px;color:#16a34a;border-color:#86efac" title="Marcar como pago" onclick="darBaixaLancamento(\'' + l.id + '\')"><i class="ti ti-check"></i></button> ' : '') +
         (l.status === 'pendente' ? '<button class="btn" style="font-size:11px;padding:4px 8px" onclick="abrirValidar(\'' + l.id + '\')">Validar</button> ' : '') +'<button class="btn" style="font-size:11px;padding:4px 8px" onclick="abrirEditar(\'' + l.id + '\')"><i class="ti ti-pencil"></i></button> ' +
         '<button class="btn" style="font-size:11px;padding:4px 8px;color:var(--red);border-color:var(--red)" onclick="excluirLancamento(\'' + l.id + '\')"><i class="ti ti-trash"></i></button>' +
       '</td>' +
@@ -562,6 +580,8 @@ function abrirEditar(id) {
   preencherSelectCategoria('editar-categoria', l.categoria);
   atualizarSubcatEditar(l.categoria, l.subcategoria);
   renderSeletorTags('editar-tags-seletor', l.tags || []);
+  document.getElementById('editar-forma-pagamento').value = l.formaPagamento || '';
+  document.getElementById('editar-situacao').value = l.situacao || 'pago';
   document.getElementById('modal-editar').style.display = 'flex';
 }
 
@@ -584,6 +604,8 @@ function salvarEdicao() {
   l.categoria = document.getElementById('editar-categoria').value;
   l.subcategoria = document.getElementById('editar-subcategoria').value;
   l.tags = getTagsSelecionadas('editar-tags-seletor');
+  l.formaPagamento = document.getElementById('editar-forma-pagamento').value;
+  l.situacao = document.getElementById('editar-situacao').value;
   l.status = 'validado';
   if (l.categoria !== catAntiga) verificarESalvarRegra(l.descricao, l);
   salvarDB(); fecharModal('modal-editar'); renderLancamentos(); renderDashboard();
@@ -1328,6 +1350,7 @@ function salvarImportacao() {
     aImportar.push(l);
   });
 
+  aImportar.forEach(l => { if (!l.situacao) l.situacao = 'pago'; });
   DB.lancamentos.push(...aImportar);
   salvarDB();
   document.getElementById('preview-importacao').style.display = 'none';
@@ -1347,38 +1370,90 @@ function salvarManual(e) {
   if (!catId) { toast('Selecione uma categoria'); return; }
   const dataLanc = document.getElementById('manual-data').value;
   const tipoLanc = document.getElementById('manual-tipo').value;
-  const novoLanc = {
-    id: gerarId(),
-    data: dataLanc,
-    descricao: document.getElementById('manual-descricao').value,
-    valor: parseFloat(document.getElementById('manual-valor').value),
-    tipo: tipoLanc,
-    categoria: catId,
-    subcategoria: document.getElementById('manual-subcategoria').value,
-    tags: getTagsSelecionadas('manual-tags-seletor'),
-    status: 'validado'
-  };
-  // Verifica se corresponde a um previsto em aberto do mesmo mês (mesma categoria e tipo)
-  const mesLanc = dataLanc.slice(0, 7);
-  const previstoAberto = (DB.previstos || []).find(p =>
-    p.categoria === catId &&
-    p.tipo === tipoLanc &&
-    !DB.lancamentos.some(l => l.previstoId === p.id && l.data.slice(0, 7) === mesLanc)
-  );
-  if (previstoAberto) {
-    if (confirm('Este lançamento corresponde ao previsto "' + previstoAberto.descricao + '" (' + fmt(previstoAberto.valor) + ')?\n\nOK = dar baixa no previsto\nCancelar = salvar sem vincular')) {
-      novoLanc.previstoId = previstoAberto.id;
-    }
+  const valorTotal = parseFloat(document.getElementById('manual-valor').value);
+  const descricao = document.getElementById('manual-descricao').value;
+  const subcategoria = document.getElementById('manual-subcategoria').value;
+  const tags = getTagsSelecionadas('manual-tags-seletor');
+  const situacao = document.getElementById('manual-situacao').value;
+  const formaPagamento = document.getElementById('manual-forma-pagamento').value;
+
+  const repetir = document.getElementById('manual-repetir').checked;
+  const parcelar = document.getElementById('manual-parcelar').checked;
+  const nRepet = parseInt(document.getElementById('manual-repetir-qtd').value) || 2;
+  const nParc = parseInt(document.getElementById('manual-parcelar-qtd').value) || 2;
+
+  // Gera data de cada ocorrência: mesmo dia, meses seguintes (respeitando meses curtos)
+  function dataMais(mesesAdiante) {
+    const [y, m, d] = dataLanc.split('-').map(Number);
+    const alvo = new Date(y, m - 1 + mesesAdiante, 1);
+    const ultimoDia = new Date(alvo.getFullYear(), alvo.getMonth() + 1, 0).getDate();
+    const dia = Math.min(d, ultimoDia);
+    return alvo.getFullYear() + '-' + String(alvo.getMonth() + 1).padStart(2, '0') + '-' + String(dia).padStart(2, '0');
   }
-  DB.lancamentos.push(novoLanc);
+
+  const grupoId = (repetir || parcelar) ? gerarId() : null;
+  const novos = [];
+
+  if (parcelar && nParc > 1) {
+    // Parcelamento: valor total dividido em N (ajuste de centavos na última)
+    const valorParcela = Math.floor((valorTotal / nParc) * 100) / 100;
+    const ultimaParcela = Math.round((valorTotal - valorParcela * (nParc - 1)) * 100) / 100;
+    for (let i = 0; i < nParc; i++) {
+      novos.push({
+        id: gerarId(), data: dataMais(i),
+        descricao: descricao + ' (' + (i + 1) + '/' + nParc + ')',
+        valor: i === nParc - 1 ? ultimaParcela : valorParcela,
+        tipo: tipoLanc, categoria: catId, subcategoria, tags: [...tags],
+        status: 'validado',
+        situacao: i === 0 ? situacao : 'aberto',
+        formaPagamento, grupoId
+      });
+    }
+  } else if (repetir && nRepet > 1) {
+    // Repetição: mesmo valor N vezes
+    for (let i = 0; i < nRepet; i++) {
+      novos.push({
+        id: gerarId(), data: dataMais(i),
+        descricao: descricao,
+        valor: valorTotal,
+        tipo: tipoLanc, categoria: catId, subcategoria, tags: [...tags],
+        status: 'validado',
+        situacao: i === 0 ? situacao : 'aberto',
+        formaPagamento, grupoId
+      });
+    }
+  } else {
+    novos.push({
+      id: gerarId(), data: dataLanc, descricao, valor: valorTotal,
+      tipo: tipoLanc, categoria: catId, subcategoria, tags,
+      status: 'validado', situacao, formaPagamento
+    });
+  }
+
+  DB.lancamentos.push(...novos);
   salvarDB();
   renderSeletorTags('manual-tags-seletor', []);
   e.target.reset();
+  document.getElementById('manual-repetir-opcoes').style.display = 'none';
+  document.getElementById('manual-parcelar-opcoes').style.display = 'none';
   fecharModal('modal-lancamento');
   atualizarBannerValidacao(); renderDashboard();
   try { renderLancamentos(); } catch(err) {}
-  try { renderPrevisao(); } catch(err) {}
-  toast('Lançamento salvo! ✓' + (novoLanc.previstoId ? ' Previsto baixado.' : ''));
+  toast(novos.length > 1 ? novos.length + ' lançamentos criados ✓' : 'Lançamento salvo! ✓');
+}
+
+function toggleRepetir() {
+  const rep = document.getElementById('manual-repetir');
+  const par = document.getElementById('manual-parcelar');
+  if (rep.checked) { par.checked = false; document.getElementById('manual-parcelar-opcoes').style.display = 'none'; }
+  document.getElementById('manual-repetir-opcoes').style.display = rep.checked ? 'flex' : 'none';
+}
+
+function toggleParcelar() {
+  const rep = document.getElementById('manual-repetir');
+  const par = document.getElementById('manual-parcelar');
+  if (par.checked) { rep.checked = false; document.getElementById('manual-repetir-opcoes').style.display = 'none'; }
+  document.getElementById('manual-parcelar-opcoes').style.display = par.checked ? 'flex' : 'none';
 }
 
 function atualizarSubcatManual() {
@@ -1428,12 +1503,43 @@ function renderDRE() {
 // ========================
 // PLANO DE CONTAS
 // ========================
+// Aba de natureza ativa no plano de contas (estilo Conta Azul)
+let planoNaturezaAtiva = 'despesa';
+
+function switchNaturezaPlano(nat, el) {
+  planoNaturezaAtiva = nat;
+  document.querySelectorAll('#plano-natureza-tabs .tab').forEach(t => t.classList.remove('active'));
+  if (el) el.classList.add('active');
+  renderPlanoContas();
+}
+
+// Comparador de códigos hierárquicos (1.2 < 1.10 < 2.1)
+function compararCodigos(a, b) {
+  const pa = (a.codigo || '9999').split('.').map(Number);
+  const pb = (b.codigo || '9999').split('.').map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const va = pa[i] || 0, vb = pb[i] || 0;
+    if (va !== vb) return va - vb;
+  }
+  return 0;
+}
+
 function renderPlanoContas() {
   const lista = document.getElementById('lista-plano-contas');
   if (!lista) return;
   lista.innerHTML = '';
-  DB.categorias.forEach((cat, idx) => {
+  const getNat = c => c.natureza || (c.id === 'outros' ? 'todas' : 'despesa');
+  // Filtra pela natureza da aba ativa + ordena por código
+  const catsFiltradas = DB.categorias
+    .filter(c => { const n = getNat(c); return n === planoNaturezaAtiva || n === 'todas'; })
+    .sort(compararCodigos);
+  if (!catsFiltradas.length) {
+    lista.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:20px;text-align:center">Nenhuma categoria nesta natureza.</div>';
+    return;
+  }
+  catsFiltradas.forEach((cat) => {
     const orc = DB.orcamentos[cat.id] || 0;
+    const idx = DB.categorias.indexOf(cat);
     const podeSubirCat = idx > 0;
     const podeDescer = idx < DB.categorias.length - 1;
     lista.innerHTML +=
@@ -1484,7 +1590,7 @@ function renderPlanoContas() {
             const podeBaixo = si < (cat.subcats||[]).length - 1;
             return '<div class="subcat-item">' +
               '<div style="display:flex;align-items:center;gap:6px;flex:1">' +
-                '<span style="color:var(--text3);font-size:12px">›</span>' +
+                '<span style="color:var(--text3);font-size:11px;min-width:52px;font-family:monospace">'+(cat.codigo ? cat.codigo + '.' + String(si+1).padStart(2,'0') : '›')+'</span>' +
                 '<input type="text" value="'+s.replace(/"/g,'&quot;')+'" ' +
                   'style="flex:1;font-size:13px;color:var(--text2);border:none;background:transparent;font-family:inherit;padding:2px 4px;border-radius:4px;cursor:text" ' +
                   'title="Editar subcategoria" ' +
@@ -1718,168 +1824,29 @@ function copiarResumo() {
 // ========================
 // SELECTS
 // ========================
-// PREVISÃO / PREVISIBILIDADE
+// SITUAÇÃO / DAR BAIXA (modelo unificado)
 // ========================
-function renderPrevisao() {
-  const tbody = document.getElementById('tbody-previstos');
-  if (tbody) {
-    const previstos = [...(DB.previstos || [])].sort((a, b) => (a.dia || 0) - (b.dia || 0));
-    if (!previstos.length) {
-      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:20px">Nenhum lançamento previsto. Cadastre seus gastos e receitas fixos.</td></tr>';
-    } else {
-      tbody.innerHTML = previstos.map(p => {
-        const amtClass = p.tipo === 'receita' ? 'pos' : p.tipo === 'interno' ? 'neu' : 'neg';
-        const amtPrefix = p.tipo === 'receita' ? '+' : p.tipo === 'interno' ? '' : '-';
-        // Status simples: pago se existe lançamento vinculado no mês atual, senão em aberto
-        const pago = DB.lancamentos.some(l => l.previstoId === p.id && l.data.slice(0, 7) === mesAtual);
-        const statusBadge = pago
-          ? '<span style="font-size:10px;padding:2px 8px;border-radius:99px;background:#dcfce7;color:#166534">✓ Pago</span>'
-          : '<span style="font-size:10px;padding:2px 8px;border-radius:99px;background:#fef9c3;color:#a16207">○ Em aberto</span>';
-        const btnBaixa = pago
-          ? ''
-          : '<button class="btn" style="font-size:11px;padding:3px 8px;color:#16a34a;border-color:#86efac" title="Marcar como pago neste mês" onclick="darBaixaPrevisto(\'' + p.id + '\')"><i class="ti ti-check"></i> Dar baixa</button> ';
-        return '<tr>' +
-          '<td style="white-space:nowrap"><span style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:6px;background:var(--bg);font-size:12px;font-weight:500">' + (p.dia || '—') + '</span></td>' +
-          '<td style="font-weight:500">' + p.descricao + ' ' + statusBadge + '</td>' +
-          '<td><span style="font-size:12px;color:var(--text2)">' + getNomeCat(p.categoria) + (p.subcategoria ? ' › ' + p.subcategoria : '') + '</span></td>' +
-          '<td><span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--bg);color:var(--text2)">' + (p.tipo === 'receita' ? 'Receita' : p.tipo === 'interno' ? 'Interno' : 'Despesa') + '</span></td>' +
-          '<td class="tx-amount ' + amtClass + '">' + amtPrefix + ' ' + fmt(p.valor) + '</td>' +
-          '<td style="white-space:nowrap">' +
-            btnBaixa +
-            '<button class="btn" style="font-size:11px;padding:3px 7px" onclick="editarPrevisto(\'' + p.id + '\')"><i class="ti ti-pencil"></i></button> ' +
-            '<button class="btn" style="font-size:11px;padding:3px 7px;color:var(--red)" onclick="excluirPrevisto(\'' + p.id + '\')"><i class="ti ti-trash"></i></button>' +
-          '</td>' +
-        '</tr>';
-      }).join('');
-    }
-  }
-
-  const receitaPrev = (DB.previstos || []).filter(p => p.tipo === 'receita').reduce((a, b) => a + b.valor, 0);
-  const despesaPrev = (DB.previstos || []).filter(p => p.tipo === 'despesa').reduce((a, b) => a + b.valor, 0);
-  const sobraPrev = receitaPrev - despesaPrev;
-  const elRec = document.getElementById('prev-receita');
-  const elDesp = document.getElementById('prev-despesa');
-  const elSobra = document.getElementById('prev-sobra');
-  if (elRec) elRec.textContent = fmt(receitaPrev);
-  if (elDesp) elDesp.textContent = fmt(despesaPrev);
-  if (elSobra) {
-    elSobra.textContent = (sobraPrev < 0 ? '- ' : '') + fmt(sobraPrev);
-    elSobra.style.color = sobraPrev < 0 ? '#f87171' : '';
-  }
-
-  const lista = document.getElementById('lista-orcamento-previsao');
-  if (lista) {
-    const cats = DB.categorias.filter(c => !c.id.startsWith('rec_') && !c.id.startsWith('inv_') && c.id !== 'outros');
-    lista.innerHTML = cats.map(c => {
-      const orc = DB.orcamentos[c.id] || 0;
-      return '<div class="cat-item">' +
-        '<span class="cat-label" style="min-width:140px">' + c.nome + '</span>' +
-        '<div class="orc-input-wrap" style="flex:1;justify-content:flex-end">' +
-          '<span style="font-size:12px;color:var(--text3)">R$</span>' +
-          '<input type="number" class="orc-input" value="' + (orc || '') + '" placeholder="—" step="0.01" onchange="salvarOrcamento(\'' + c.id + '\',this.value);renderPrevisao()">' +
-        '</div>' +
-      '</div>';
-    }).join('');
-  }
-}
-
-function abrirModalPrevisto() {
-  document.getElementById('previsto-id').value = '';
-  document.getElementById('previsto-modal-titulo').textContent = 'Novo lançamento previsto';
-  document.getElementById('previsto-descricao').value = '';
-  document.getElementById('previsto-valor').value = '';
-  document.getElementById('previsto-dia').value = '';
-  document.getElementById('previsto-tipo').value = 'despesa';
-  preencherSelectCategoriaPorTipo('previsto-categoria', 'despesa', '');
-  atualizarSubcatPrevisto();
-  document.getElementById('modal-previsto').style.display = 'flex';
-}
-
-function atualizarSubcatPrevisto() {
-  const catId = document.getElementById('previsto-categoria').value;
-  const sel = document.getElementById('previsto-subcategoria');
-  if (!sel) return;
-  const subcats = getSubcats(catId);
-  sel.innerHTML = '<option value="">Sem subcategoria</option>' + subcats.map(s => '<option value="' + s + '">' + s + '</option>').join('');
-}
-
-function salvarPrevisto() {
-  const id = document.getElementById('previsto-id').value;
-  const descricao = document.getElementById('previsto-descricao').value.trim();
-  const valor = parseFloat(document.getElementById('previsto-valor').value);
-  const dia = parseInt(document.getElementById('previsto-dia').value) || null;
-  const tipo = document.getElementById('previsto-tipo').value;
-  const categoria = document.getElementById('previsto-categoria').value;
-  const subcategoria = document.getElementById('previsto-subcategoria').value;
-  if (!descricao) { toast('Informe a descrição'); return; }
-  if (isNaN(valor) || valor <= 0) { toast('Informe um valor válido'); return; }
-  if (!categoria) { toast('Selecione uma categoria'); return; }
-
-  if (id) {
-    const p = DB.previstos.find(x => x.id === id);
-    if (p) { Object.assign(p, { descricao, valor, dia, tipo, categoria, subcategoria }); }
-  } else {
-    if (!DB.previstos) DB.previstos = [];
-    DB.previstos.push({ id: gerarId(), descricao, valor, dia, tipo, categoria, subcategoria });
-  }
+function darBaixaLancamento(id) {
+  const l = DB.lancamentos.find(x => x.id === id);
+  if (!l) return;
+  if ((l.situacao || 'pago') === 'pago') { toast('Este lançamento já está pago'); return; }
+  l.situacao = 'pago';
   salvarDB();
-  fecharModal('modal-previsto');
-  renderPrevisao();
+  try { renderLancamentos(); } catch(e) {}
   renderDashboard();
-  toast('Previsto salvo!');
+  toast('✓ Baixa realizada — "' + l.descricao + '"');
 }
 
-function editarPrevisto(id) {
-  const p = DB.previstos.find(x => x.id === id);
-  if (!p) return;
-  document.getElementById('previsto-id').value = p.id;
-  document.getElementById('previsto-modal-titulo').textContent = 'Editar lançamento previsto';
-  document.getElementById('previsto-descricao').value = p.descricao;
-  document.getElementById('previsto-valor').value = p.valor;
-  document.getElementById('previsto-dia').value = p.dia || '';
-  document.getElementById('previsto-tipo').value = p.tipo;
-  preencherSelectCategoriaPorTipo('previsto-categoria', p.tipo, p.categoria);
-  atualizarSubcatPrevisto();
-  document.getElementById('previsto-subcategoria').value = p.subcategoria || '';
-  document.getElementById('modal-previsto').style.display = 'flex';
-}
-
-function darBaixaPrevisto(id) {
-  const p = DB.previstos.find(x => x.id === id);
-  if (!p) return;
-  // Já foi pago neste mês?
-  const jaPago = DB.lancamentos.some(l => l.previstoId === p.id && l.data.slice(0, 7) === mesAtual);
-  if (jaPago) { toast('Este previsto já está pago neste mês'); return; }
-  // Data do lançamento: dia previsto no mês atual (ou hoje se não tiver dia)
-  const hoje = new Date().toISOString().slice(0, 10);
-  const dia = p.dia ? String(Math.min(p.dia, 28)).padStart(2, '0') : hoje.slice(8, 10);
-  const data = mesAtual === hoje.slice(0, 7) ? mesAtual + '-' + dia : mesAtual + '-' + dia;
-  DB.lancamentos.push({
-    id: gerarId(),
-    data: data,
-    descricao: p.descricao,
-    valor: p.valor,
-    tipo: p.tipo,
-    categoria: p.categoria,
-    subcategoria: p.subcategoria || '',
-    tags: [],
-    status: 'validado',
-    previstoId: p.id
-  });
+function reabrirLancamento(id) {
+  const l = DB.lancamentos.find(x => x.id === id);
+  if (!l) return;
+  l.situacao = 'aberto';
   salvarDB();
-  renderPrevisao();
+  try { renderLancamentos(); } catch(e) {}
   renderDashboard();
-  toast('✓ Baixa realizada — "' + p.descricao + '" marcado como pago');
+  toast('Lançamento reaberto');
 }
 
-function excluirPrevisto(id) {
-  if (!confirm('Excluir este lançamento previsto?')) return;
-  DB.previstos = DB.previstos.filter(x => x.id !== id);
-  salvarDB();
-  renderPrevisao();
-  renderDashboard();
-  toast('Previsto removido');
-}
 
 // ========================
 // CONCILIAÇÃO BANCÁRIA
@@ -1927,8 +1894,9 @@ function buscarConciliacao(lancExtrato) {
 // Aplica conciliação a um lançamento do preview
 function aplicarConciliacao(previewLanc, match) {
   if (match.tipo === 'lancamento') {
-    // Marca o lançamento existente como conciliado e atualiza com dados do banco
+    // Marca o lançamento existente como conciliado, pago, e atualiza com dados do banco
     match.ref.conciliado = true;
+    match.ref.situacao = 'pago';
     match.ref.dataExtrato = previewLanc.data;
     match.ref.origem = previewLanc.origem;
     previewLanc._conciliarCom = { tipo: 'lancamento', id: match.ref.id };
