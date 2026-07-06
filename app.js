@@ -304,7 +304,9 @@ function renderDashboard() {
 
   document.getElementById('m-receitas').textContent = fmt(receitas);
   document.getElementById('m-despesas').textContent = fmt(despesas);
-  document.getElementById('m-sobra').textContent = fmt(sobra);
+  const elSobraM = document.getElementById('m-sobra');
+  elSobraM.textContent = (sobra < 0 ? '- ' : '') + fmt(sobra);
+  elSobraM.style.color = sobra < 0 ? '#f87171' : '';
 
   const pats = [...DB.patrimonio].sort((a, b) => a.mes.localeCompare(b.mes));
   const pat = pats.length ? pats[pats.length - 1].valor : 0;
@@ -394,7 +396,7 @@ function renderDashboard() {
       const fechamento = receitaProjetada - despesaProjetada;
       const elFech = document.getElementById('proj-fechamento');
       const elStatus = document.getElementById('proj-status');
-      elFech.textContent = fmt(fechamento);
+      elFech.textContent = (fechamento < 0 ? '- ' : '') + fmt(fechamento);
       elFech.style.color = fechamento >= 0 ? 'var(--green)' : 'var(--red)';
       if (fechamento >= 0) {
         elStatus.innerHTML = '<span style="color:var(--green)">✓ No ritmo atual, você fecha com sobra</span>';
@@ -1343,24 +1345,40 @@ function salvarManual(e) {
   e.preventDefault();
   const catId = document.getElementById('manual-categoria').value;
   if (!catId) { toast('Selecione uma categoria'); return; }
-  DB.lancamentos.push({
+  const dataLanc = document.getElementById('manual-data').value;
+  const tipoLanc = document.getElementById('manual-tipo').value;
+  const novoLanc = {
     id: gerarId(),
-    data: document.getElementById('manual-data').value,
+    data: dataLanc,
     descricao: document.getElementById('manual-descricao').value,
     valor: parseFloat(document.getElementById('manual-valor').value),
-    tipo: document.getElementById('manual-tipo').value,
+    tipo: tipoLanc,
     categoria: catId,
     subcategoria: document.getElementById('manual-subcategoria').value,
     tags: getTagsSelecionadas('manual-tags-seletor'),
     status: 'validado'
-  });
+  };
+  // Verifica se corresponde a um previsto em aberto do mesmo mês (mesma categoria e tipo)
+  const mesLanc = dataLanc.slice(0, 7);
+  const previstoAberto = (DB.previstos || []).find(p =>
+    p.categoria === catId &&
+    p.tipo === tipoLanc &&
+    !DB.lancamentos.some(l => l.previstoId === p.id && l.data.slice(0, 7) === mesLanc)
+  );
+  if (previstoAberto) {
+    if (confirm('Este lançamento corresponde ao previsto "' + previstoAberto.descricao + '" (' + fmt(previstoAberto.valor) + ')?\n\nOK = dar baixa no previsto\nCancelar = salvar sem vincular')) {
+      novoLanc.previstoId = previstoAberto.id;
+    }
+  }
+  DB.lancamentos.push(novoLanc);
   salvarDB();
   renderSeletorTags('manual-tags-seletor', []);
   e.target.reset();
   fecharModal('modal-lancamento');
   atualizarBannerValidacao(); renderDashboard();
   try { renderLancamentos(); } catch(err) {}
-  toast('Lançamento salvo! ✓');
+  try { renderPrevisao(); } catch(err) {}
+  toast('Lançamento salvo! ✓' + (novoLanc.previstoId ? ' Previsto baixado.' : ''));
 }
 
 function atualizarSubcatManual() {
@@ -1712,19 +1730,14 @@ function renderPrevisao() {
       tbody.innerHTML = previstos.map(p => {
         const amtClass = p.tipo === 'receita' ? 'pos' : p.tipo === 'interno' ? 'neu' : 'neg';
         const amtPrefix = p.tipo === 'receita' ? '+' : p.tipo === 'interno' ? '' : '-';
-        // Verifica se já foi realizado (conciliado) no mês atual
-        const realizado = DB.lancamentos.find(l => l.previstoId === p.id && l.data.slice(0, 7) === mesAtual);
-        const hoje = new Date();
-        const diaHoje = hoje.getDate();
-        const mesHoje = hoje.toISOString().slice(0, 7);
-        let statusBadge;
-        if (realizado) {
-          statusBadge = '<span style="font-size:10px;padding:2px 8px;border-radius:99px;background:#dcfce7;color:#166534">✓ Realizado</span>';
-        } else if (mesAtual === mesHoje && p.dia && p.dia < diaHoje) {
-          statusBadge = '<span style="font-size:10px;padding:2px 8px;border-radius:99px;background:#fee2e2;color:#b91c1c">⚠ Atrasado</span>';
-        } else {
-          statusBadge = '<span style="font-size:10px;padding:2px 8px;border-radius:99px;background:#fef9c3;color:#a16207">○ Pendente</span>';
-        }
+        // Status simples: pago se existe lançamento vinculado no mês atual, senão em aberto
+        const pago = DB.lancamentos.some(l => l.previstoId === p.id && l.data.slice(0, 7) === mesAtual);
+        const statusBadge = pago
+          ? '<span style="font-size:10px;padding:2px 8px;border-radius:99px;background:#dcfce7;color:#166534">✓ Pago</span>'
+          : '<span style="font-size:10px;padding:2px 8px;border-radius:99px;background:#fef9c3;color:#a16207">○ Em aberto</span>';
+        const btnBaixa = pago
+          ? ''
+          : '<button class="btn" style="font-size:11px;padding:3px 8px;color:#16a34a;border-color:#86efac" title="Marcar como pago neste mês" onclick="darBaixaPrevisto(\'' + p.id + '\')"><i class="ti ti-check"></i> Dar baixa</button> ';
         return '<tr>' +
           '<td style="white-space:nowrap"><span style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:6px;background:var(--bg);font-size:12px;font-weight:500">' + (p.dia || '—') + '</span></td>' +
           '<td style="font-weight:500">' + p.descricao + ' ' + statusBadge + '</td>' +
@@ -1732,6 +1745,7 @@ function renderPrevisao() {
           '<td><span style="font-size:11px;padding:2px 8px;border-radius:99px;background:var(--bg);color:var(--text2)">' + (p.tipo === 'receita' ? 'Receita' : p.tipo === 'interno' ? 'Interno' : 'Despesa') + '</span></td>' +
           '<td class="tx-amount ' + amtClass + '">' + amtPrefix + ' ' + fmt(p.valor) + '</td>' +
           '<td style="white-space:nowrap">' +
+            btnBaixa +
             '<button class="btn" style="font-size:11px;padding:3px 7px" onclick="editarPrevisto(\'' + p.id + '\')"><i class="ti ti-pencil"></i></button> ' +
             '<button class="btn" style="font-size:11px;padding:3px 7px;color:var(--red)" onclick="excluirPrevisto(\'' + p.id + '\')"><i class="ti ti-trash"></i></button>' +
           '</td>' +
@@ -1748,7 +1762,10 @@ function renderPrevisao() {
   const elSobra = document.getElementById('prev-sobra');
   if (elRec) elRec.textContent = fmt(receitaPrev);
   if (elDesp) elDesp.textContent = fmt(despesaPrev);
-  if (elSobra) elSobra.textContent = fmt(sobraPrev);
+  if (elSobra) {
+    elSobra.textContent = (sobraPrev < 0 ? '- ' : '') + fmt(sobraPrev);
+    elSobra.style.color = sobraPrev < 0 ? '#f87171' : '';
+  }
 
   const lista = document.getElementById('lista-orcamento-previsao');
   if (lista) {
@@ -1827,6 +1844,34 @@ function editarPrevisto(id) {
   document.getElementById('modal-previsto').style.display = 'flex';
 }
 
+function darBaixaPrevisto(id) {
+  const p = DB.previstos.find(x => x.id === id);
+  if (!p) return;
+  // Já foi pago neste mês?
+  const jaPago = DB.lancamentos.some(l => l.previstoId === p.id && l.data.slice(0, 7) === mesAtual);
+  if (jaPago) { toast('Este previsto já está pago neste mês'); return; }
+  // Data do lançamento: dia previsto no mês atual (ou hoje se não tiver dia)
+  const hoje = new Date().toISOString().slice(0, 10);
+  const dia = p.dia ? String(Math.min(p.dia, 28)).padStart(2, '0') : hoje.slice(8, 10);
+  const data = mesAtual === hoje.slice(0, 7) ? mesAtual + '-' + dia : mesAtual + '-' + dia;
+  DB.lancamentos.push({
+    id: gerarId(),
+    data: data,
+    descricao: p.descricao,
+    valor: p.valor,
+    tipo: p.tipo,
+    categoria: p.categoria,
+    subcategoria: p.subcategoria || '',
+    tags: [],
+    status: 'validado',
+    previstoId: p.id
+  });
+  salvarDB();
+  renderPrevisao();
+  renderDashboard();
+  toast('✓ Baixa realizada — "' + p.descricao + '" marcado como pago');
+}
+
 function excluirPrevisto(id) {
   if (!confirm('Excluir este lançamento previsto?')) return;
   DB.previstos = DB.previstos.filter(x => x.id !== id);
@@ -1844,26 +1889,16 @@ function buscarConciliacao(lancExtrato) {
   const valorExtrato = Math.abs(lancExtrato.valor);
   const dataExtrato = new Date(lancExtrato.data);
 
-  // Candidatos: lançamentos manuais não conciliados + previstos do mês
+  // Candidatos: apenas lançamentos manuais já registrados (evita duplicata na importação).
+  // Previstos NÃO entram mais no matching automático — a baixa deles é manual (botão "Dar baixa")
+  // ou oferecida no momento do lançamento manual.
   const candidatos = [];
 
-  // Lançamentos já no sistema, não conciliados, mesmo tipo
   DB.lancamentos.forEach(l => {
     if (l.conciliado) return;
     if (l.origem) return; // ignora os que vieram de importação anterior
     if (l.tipo !== lancExtrato.tipo) return;
     candidatos.push({ tipo: 'lancamento', ref: l, descricao: l.descricao, valor: Math.abs(l.valor), data: l.data });
-  });
-
-  // Previstos: gera data esperada no mês do extrato
-  const mesExtrato = lancExtrato.data.slice(0, 7);
-  (DB.previstos || []).forEach(p => {
-    if (p.tipo !== lancExtrato.tipo) return;
-    // Verifica se já foi conciliado esse previsto nesse mês
-    const jaConciliado = DB.lancamentos.some(l => l.previstoId === p.id && l.data.slice(0, 7) === mesExtrato);
-    if (jaConciliado) return;
-    const dataPrev = p.dia ? mesExtrato + '-' + String(p.dia).padStart(2, '0') : lancExtrato.data;
-    candidatos.push({ tipo: 'previsto', ref: p, descricao: p.descricao, valor: Math.abs(p.valor), data: dataPrev });
   });
 
   let melhorMatch = null;
