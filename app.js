@@ -13,13 +13,12 @@ let DB = {
     { id: 'rec_eventual', natureza: 'receita',     nome: 'Eventual',                  cor: '#4ade80', codigo: '1.5', subcats: ['Venda de Bens','Outros'] },
     // ── DESPESAS FIXAS ──
     { id: 'moradia', natureza: 'despesa',          nome: 'Moradia',                   cor: '#84cc16', codigo: '2.1', subcats: ['Aluguel','Condomínio','Internet','Água (Semae)','Energia Elétrica','Gás','Outros'] },
-    { id: 'transp_fixo', natureza: 'despesa',      nome: 'Transporte Fixo',           cor: '#65a30d', codigo: '2.2', subcats: ['IPVA / Licenciamento','Seguro do Veículo','Financiamento Veículo'] },
     { id: 'assinaturas', natureza: 'despesa',      nome: 'Assinaturas',               cor: '#6366f1', codigo: '2.3', subcats: ['Telefone','Streaming','Google','Apps','Outros'] },
     { id: 'faculdade', natureza: 'despesa',        nome: 'Faculdade',                 cor: '#8b5cf6', codigo: '2.4', subcats: ['Mensalidade Estácio','Material'] },
     { id: 'igreja', natureza: 'despesa',           nome: 'Igreja',                    cor: '#ec4899', codigo: '2.5', subcats: ['Dízimo','Oferta','Eventos'] },
     // ── DESPESAS VARIÁVEIS ──
     { id: 'alimentacao', natureza: 'despesa',      nome: 'Alimentação',               cor: '#f59e0b', codigo: '3.1', subcats: ['Mercado','Delivery','Restaurante','Outros'] },
-    { id: 'transp_variavel', natureza: 'despesa',  nome: 'Transporte Variável',       cor: '#d97706', codigo: '3.2', subcats: ['Combustível Carro','Combustível Moto','Manutenção Carro','Manutenção Moto','Pneus','Uber','Estacionamento','Multa'] },
+    { id: 'transp_variavel', natureza: 'despesa',  nome: 'Transporte',                cor: '#d97706', codigo: '3.2', subcats: ['Combustível Carro','Combustível Moto','Manutenção Carro','Manutenção Moto','Pneus','Uber','Estacionamento','Multa','IPVA / Licenciamento','Seguro do Veículo','Financiamento Veículo'] },
     { id: 'saude_corpo', natureza: 'despesa',      nome: 'Saúde & Corpo',             cor: '#2dd4bf', codigo: '3.3', subcats: ['Academia','Muay thai','Suplemento','Convênio','Nutricionista','Psicólogo','Quiropraxia','Remédio','Equipamentos','Outros'] },
     { id: 'cuidado_pessoal', natureza: 'despesa',  nome: 'Cuidado Pessoal',           cor: '#f43f5e', codigo: '3.4', subcats: ['Barbearia','Cosméticos','Outros'] },
     { id: 'formacao', natureza: 'despesa',         nome: 'Formação',                  cor: '#a855f7', codigo: '3.5', subcats: ['Cursos','Livros','Mentoria','Outros'] },
@@ -59,6 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
   try { renderDashboard(); } catch(e) { console.error('renderDashboard:', e); }
   try { renderLancamentos(); } catch(e) { console.error('renderLancamentos:', e); }
   try { atualizarBannerValidacao(); } catch(e) { console.error('banner:', e); }
+  try { atualizarLembreteBackup(); } catch(e) { console.error('backup:', e); }
 });
 
 // ========================
@@ -96,12 +96,11 @@ function carregarDB() {
           { id: 'rec_investimentos', natureza: 'receita', nome: 'Rendimentos',             cor: '#14532d', codigo: '1.4', subcats: ['Dividendos','Juros / Renda Fixa','CDB / LCI / LCA','Outros'] },
           { id: 'rec_eventual', natureza: 'receita',      nome: 'Eventual',                cor: '#4ade80', codigo: '1.5', subcats: ['Venda de Bens','Outros'] },
           { id: 'moradia', natureza: 'despesa',           nome: 'Moradia',                 cor: '#84cc16', codigo: '2.1', subcats: ['Aluguel','Condomínio','Internet','Água (Semae)','Energia Elétrica','Gás','Outros'] },
-          { id: 'transp_fixo', natureza: 'despesa',       nome: 'Transporte Fixo',         cor: '#65a30d', codigo: '2.2', subcats: ['IPVA / Licenciamento','Seguro do Veículo','Financiamento Veículo'] },
           { id: 'assinaturas', natureza: 'despesa',       nome: 'Assinaturas',             cor: '#6366f1', codigo: '2.3', subcats: ['Telefone','Streaming','Google','Apps','Outros'] },
           { id: 'faculdade', natureza: 'despesa',         nome: 'Faculdade',               cor: '#8b5cf6', codigo: '2.4', subcats: ['Mensalidade Estácio','Material'] },
           { id: 'igreja', natureza: 'despesa',            nome: 'Igreja',                  cor: '#ec4899', codigo: '2.5', subcats: ['Dízimo','Oferta','Eventos'] },
           { id: 'alimentacao', natureza: 'despesa',       nome: 'Alimentação',             cor: '#f59e0b', codigo: '3.1', subcats: ['Mercado','Delivery','Restaurante','Outros'] },
-          { id: 'transp_variavel', natureza: 'despesa',   nome: 'Transporte Variável',     cor: '#d97706', codigo: '3.2', subcats: ['Combustível Carro','Combustível Moto','Manutenção Carro','Manutenção Moto','Pneus','Uber','Estacionamento','Multa'] },
+          { id: 'transp_variavel', natureza: 'despesa',   nome: 'Transporte',              cor: '#d97706', codigo: '3.2', subcats: ['Combustível Carro','Combustível Moto','Manutenção Carro','Manutenção Moto','Pneus','Uber','Estacionamento','Multa','IPVA / Licenciamento','Seguro do Veículo','Financiamento Veículo'] },
           { id: 'saude_corpo', natureza: 'despesa',       nome: 'Saúde & Corpo',           cor: '#2dd4bf', codigo: '3.3', subcats: ['Academia','Muay thai','Suplemento','Convênio','Nutricionista','Psicólogo','Quiropraxia','Remédio','Equipamentos','Outros'] },
           { id: 'cuidado_pessoal', natureza: 'despesa',   nome: 'Cuidado Pessoal',         cor: '#f43f5e', codigo: '3.4', subcats: ['Barbearia','Cosméticos','Outros'] },
           { id: 'formacao', natureza: 'despesa',          nome: 'Formação',                cor: '#a855f7', codigo: '3.5', subcats: ['Cursos','Livros','Mentoria','Outros'] },
@@ -194,6 +193,32 @@ function carregarDB() {
         salvarDB();
         console.log('Migração v5 — modelo unificado com situação');
       }
+      // Migração v6 — funde Transporte Fixo + Variável em "Transporte"
+      if (!parsed.migradoV6) {
+        const fixo = DB.categorias.find(c => c.id === 'transp_fixo');
+        const variavel = DB.categorias.find(c => c.id === 'transp_variavel');
+        if (variavel) {
+          variavel.nome = 'Transporte';
+          if (fixo) {
+            // Move subcats do fixo que não existem no variável
+            (fixo.subcats || []).forEach(s => {
+              if (!(variavel.subcats || []).includes(s)) variavel.subcats.push(s);
+            });
+            DB.categorias = DB.categorias.filter(c => c.id !== 'transp_fixo');
+          }
+          // Migra lançamentos e regras
+          DB.lancamentos.forEach(l => { if (l.categoria === 'transp_fixo') l.categoria = 'transp_variavel'; });
+          DB.regras.forEach(r => { if (r.categoria === 'transp_fixo') r.categoria = 'transp_variavel'; });
+          // Orçamento: soma os dois se existirem
+          if (DB.orcamentos['transp_fixo']) {
+            DB.orcamentos['transp_variavel'] = (DB.orcamentos['transp_variavel'] || 0) + DB.orcamentos['transp_fixo'];
+            delete DB.orcamentos['transp_fixo'];
+          }
+        }
+        DB.migradoV6 = true;
+        salvarDB();
+        console.log('Migração v6 — Transporte unificado');
+      }
     } catch(e) { console.error('Erro ao carregar DB', e); }
   }
 }
@@ -265,7 +290,7 @@ function fecharModal(id) {
 }
 function formatarData(data) {
   const d = new Date(data + 'T12:00:00');
-  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' });
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
 }
 function gerarId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -407,9 +432,8 @@ function renderDashboard() {
           '<div class="tx-icon" style="background:#fef9c3"><i class="ti ti-clock" style="color:#a16207"></i></div>' +
           '<div class="tx-info"><div class="tx-name">' + l.descricao + '</div>' +
           '<div class="tx-cat">' + getNomeCat(l.categoria) + ' · vence ' + formatarData(l.data) + '</div></div>' +
-          '<div class="tx-right" style="display:flex;align-items:center;gap:10px">' +
-            '<div><div class="tx-amount ' + amtClass + '">' + amtPrefix + fmt(l.valor) + '</div></div>' +
-            '<button class="btn" style="font-size:11px;padding:4px 10px;color:#16a34a;border-color:#86efac" onclick="darBaixaLancamento(\'' + l.id + '\')"><i class="ti ti-check"></i> Dar baixa</button>' +
+          '<div class="tx-right">' +
+            '<div class="tx-amount ' + amtClass + '">' + amtPrefix + fmt(l.valor) + '</div>' +
           '</div></div>';
       }).join('');
     } else {
@@ -463,19 +487,87 @@ function renderChartPatrimonio() {
 // ========================
 // LANÇAMENTOS
 // ========================
+// Estado de ordenação da tabela de lançamentos
+let lancSortCol = 'data';
+let lancSortDir = -1; // -1 = decrescente (mais recente primeiro)
+
+function ordenarPor(col) {
+  if (lancSortCol === col) { lancSortDir *= -1; }
+  else { lancSortCol = col; lancSortDir = col === 'data' ? -1 : 1; }
+  renderLancamentos();
+}
+
+function aplicarFiltroRapido(tipo) {
+  const hoje = new Date();
+  const y = hoje.getFullYear(), m = hoje.getMonth();
+  const fmt = d => d.toISOString().slice(0, 10);
+  let ini = '', fim = '';
+  if (tipo === 'mes_atual') { ini = fmt(new Date(y, m, 1)); fim = fmt(new Date(y, m + 1, 0)); }
+  else if (tipo === 'mes_anterior') { ini = fmt(new Date(y, m - 1, 1)); fim = fmt(new Date(y, m, 0)); }
+  else if (tipo === 'mes_seguinte') { ini = fmt(new Date(y, m + 1, 1)); fim = fmt(new Date(y, m + 2, 0)); }
+  else if (tipo === 'ultimos_3') { ini = fmt(new Date(y, m - 2, 1)); fim = fmt(new Date(y, m + 1, 0)); }
+  else if (tipo === 'ano_atual') { ini = y + '-01-01'; fim = y + '-12-31'; }
+  document.getElementById('filtro-data-inicio').value = ini;
+  document.getElementById('filtro-data-fim').value = fim;
+  // Destaca o botão ativo
+  document.querySelectorAll('.filtro-rapido').forEach(b => b.classList.remove('btn-dark'));
+  const btn = document.getElementById('fr-' + tipo);
+  if (btn) btn.classList.add('btn-dark');
+  renderLancamentos();
+}
+
+function limparFiltroRapido() {
+  document.getElementById('filtro-data-inicio').value = '';
+  document.getElementById('filtro-data-fim').value = '';
+  document.querySelectorAll('.filtro-rapido').forEach(b => b.classList.remove('btn-dark'));
+  renderLancamentos();
+}
+
 function renderLancamentos() {
   const status = document.getElementById('filtro-status').value;
   const tipo = document.getElementById('filtro-tipo').value;
   const cat = document.getElementById('filtro-categoria').value;
   const tag = document.getElementById('filtro-tag')?.value || '';
+  const busca = (document.getElementById('busca-global')?.value || '').trim().toLowerCase();
+  const dataIni = document.getElementById('filtro-data-inicio')?.value || '';
+  const dataFim = document.getElementById('filtro-data-fim')?.value || '';
 
-  let lista = [...DB.lancamentos].sort((a, b) => b.data.localeCompare(a.data));
+  let lista = [...DB.lancamentos];
+
+  // Ordenação clicável
+  lista.sort((a, b) => {
+    let va, vb;
+    if (lancSortCol === 'data') { va = a.data; vb = b.data; }
+    else if (lancSortCol === 'descricao') { va = a.descricao.toLowerCase(); vb = b.descricao.toLowerCase(); }
+    else if (lancSortCol === 'categoria') { va = getNomeCat(a.categoria).toLowerCase(); vb = getNomeCat(b.categoria).toLowerCase(); }
+    else if (lancSortCol === 'valor') { return (a.valor - b.valor) * lancSortDir; }
+    else { va = a.data; vb = b.data; }
+    return va < vb ? -lancSortDir : va > vb ? lancSortDir : 0;
+  });
+
   if (status) lista = lista.filter(l => l.status === status || (status === 'interno' && l.tipo === 'interno'));
   if (tipo) lista = lista.filter(l => l.tipo === tipo);
   if (cat) lista = lista.filter(l => l.categoria === cat);
   if (tag) lista = lista.filter(l => (l.tags || []).includes(tag));
+  // Busca por descrição, categoria ou tag
+  if (busca) lista = lista.filter(l =>
+    l.descricao.toLowerCase().includes(busca) ||
+    getNomeCat(l.categoria).toLowerCase().includes(busca) ||
+    (l.subcategoria || '').toLowerCase().includes(busca) ||
+    (l.tags || []).some(t => t.toLowerCase().includes(busca))
+  );
+  // Filtro por período
+  if (dataIni) lista = lista.filter(l => l.data >= dataIni);
+  if (dataFim) lista = lista.filter(l => l.data <= dataFim);
   const situacaoFiltro = document.getElementById('filtro-situacao')?.value || '';
   if (situacaoFiltro) lista = lista.filter(l => (l.situacao || 'pago') === situacaoFiltro);
+
+  // Atualiza setas nos cabeçalhos
+  document.querySelectorAll('.th-sort').forEach(th => {
+    const col = th.dataset.col;
+    const base = th.dataset.label;
+    th.innerHTML = base + (lancSortCol === col ? (lancSortDir === 1 ? ' ↑' : ' ↓') : '');
+  });
 
   const tbody = document.getElementById('tbody-lancamentos');
   tbody.innerHTML = '';
@@ -720,6 +812,7 @@ function salvarEdicao() {
       x.grupoId === l.grupoId && x.id !== l.id &&
       (escopo === 'todos' || x.data >= l.data)
     );
+    const diaNovo = parseInt(l.data.slice(8, 10));
     irmaos.forEach(x => {
       // Propaga: descrição base (preservando sufixo de parcela), valor, categoria, subcat, tipo, forma pgto, tags
       x.descricao = base + sufixoParcela(x.descricao);
@@ -729,7 +822,10 @@ function salvarEdicao() {
       x.tipo = l.tipo;
       x.formaPagamento = l.formaPagamento;
       x.tags = [...l.tags];
-      // Data e situação NUNCA propagam — cada parcela tem a sua
+      // DIA do vencimento propaga (mantendo o mês/ano de cada parcela); situação nunca propaga
+      const [xy, xm] = x.data.split('-').map(Number);
+      const ultimoDia = new Date(xy, xm, 0).getDate();
+      x.data = x.data.slice(0, 8) + String(Math.min(diaNovo, ultimoDia)).padStart(2, '0');
       propagados++;
     });
   }
@@ -959,7 +1055,7 @@ function classificarCategoria(descricao) {
   if (['joalheria','joalhe','amsterdam','amisterdan','flores'].some(p => desc.includes(p))) return 'presentes';
   if (['postopalace','posto uni','posto bene','posto porcino','auto posto','combustivel','shell','petrobras','ipiranga'].some(p => desc.includes(p))) return 'transp_variavel';
   if (['uberrides','uber','99app','estacionamento','multa'].some(p => desc.includes(p))) return 'transp_variavel';
-  if (['ipva','seguro','licenciamento'].some(p => desc.includes(p))) return 'transp_fixo';
+  if (['ipva','seguro','licenciamento'].some(p => desc.includes(p))) return 'transp_variavel';
   if (['cdb','lci','lca','tesouro','acoes','fii','etf','bdr','xp investimentos','inter invest'].some(p => desc.includes(p))) return 'inv_renda_fixa';
   return 'outros';
 }
@@ -1659,7 +1755,7 @@ function renderPlanoContas() {
   // Filtra pela natureza da aba ativa + ordena por código
   const catsFiltradas = DB.categorias
     .filter(c => { const n = getNat(c); return n === planoNaturezaAtiva || n === 'todas'; })
-    .sort(compararCodigos);
+    .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
   if (!catsFiltradas.length) {
     lista.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:20px;text-align:center">Nenhuma categoria nesta natureza.</div>';
     return;
@@ -2142,8 +2238,50 @@ function exportarDados() {
   const blob = new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'financeiro-paulo-'+new Date().toISOString().slice(0,10)+'.json';
-  a.click(); toast('Dados exportados!');
+  a.download = 'backup-financeiro-'+new Date().toISOString().slice(0,10)+'.json';
+  a.click();
+  localStorage.setItem('ultimo-backup', new Date().toISOString().slice(0,10));
+  atualizarLembreteBackup();
+  toast('✓ Backup salvo! Guarde o arquivo em local seguro (Drive, e-mail...)');
+}
+
+function restaurarBackup(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const dados = JSON.parse(e.target.result);
+      if (!dados.lancamentos && !dados.categorias) { toast('⚠️ Arquivo inválido — não parece um backup do sistema'); return; }
+      if (!confirm('Restaurar backup? Os dados ATUAIS serão substituídos pelos do arquivo.\n\nLançamentos no backup: ' + (dados.lancamentos || []).length)) { input.value = ''; return; }
+      Object.keys(dados).forEach(k => { DB[k] = dados[k]; });
+      salvarDB();
+      location.reload();
+    } catch(err) {
+      toast('⚠️ Erro ao ler o arquivo: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function atualizarLembreteBackup() {
+  const aviso = document.getElementById('aviso-backup');
+  if (!aviso) return;
+  const ultimo = localStorage.getItem('ultimo-backup');
+  const temDados = DB.lancamentos.length > 0;
+  if (!temDados) { aviso.style.display = 'none'; return; }
+  let diasSem = 999;
+  if (ultimo) {
+    diasSem = Math.floor((new Date() - new Date(ultimo + 'T12:00:00')) / (1000 * 60 * 60 * 24));
+  }
+  if (diasSem >= 7) {
+    aviso.style.display = 'flex';
+    document.getElementById('aviso-backup-texto').textContent = ultimo
+      ? 'Seu último backup foi há ' + diasSem + ' dias. Seus dados vivem só neste navegador — faça um backup.'
+      : 'Você ainda não fez nenhum backup. Seus dados vivem só neste navegador — se o cache for limpo, perde tudo.';
+  } else {
+    aviso.style.display = 'none';
+  }
 }
 
 function limparDados() {
