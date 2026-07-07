@@ -40,6 +40,7 @@
         <div class="topbar-sub" id="page-sub">Maio 2026</div>
       </div>
       <div class="topbar-actions">
+        <button class="btn" onclick="exportarDados()" title="Baixar backup completo dos seus dados"><i class="ti ti-database-export"></i> Backup</button>
         <button class="btn" onclick="showPage('importar')"><i class="ti ti-checklist"></i> Conferência</button>
         <button class="btn btn-dark" onclick="gerarResumoCoach()"><i class="ti ti-message-2"></i> Resumo p/ coach</button>
         <button class="btn btn-accent" onclick="abrirModalLancamento()"><i class="ti ti-plus"></i> Novo lançamento</button>
@@ -72,6 +73,11 @@
           </div>
           <button class="btn btn-ghost" onclick="showPage('lancamentos'); filtrarPendentes()">Revisar <i class="ti ti-arrow-right"></i></button>
         </div>
+        <div id="aviso-backup" style="display:none;align-items:center;gap:10px;padding:10px 16px;background:#fef9c3;border:0.5px solid #fde047;border-radius:10px;margin-bottom:14px">
+          <i class="ti ti-alert-triangle" style="color:#a16207;font-size:18px"></i>
+          <span id="aviso-backup-texto" style="flex:1;font-size:13px;color:#713f12">—</span>
+          <button class="btn" style="font-size:12px;padding:5px 12px;background:#a16207;border-color:#a16207;color:#fff" onclick="exportarDados()"><i class="ti ti-database-export"></i> Fazer backup agora</button>
+        </div>
         <div class="metrics" style="grid-template-columns:repeat(3,1fr)">
           <div class="metric-card"><div class="metric-label"><i class="ti ti-arrow-down-circle"></i> Entrou no mês</div><div class="metric-value" style="font-size:24px" id="m-receitas">R$ 0</div><div class="metric-delta" id="d-receitas"></div></div>
           <div class="metric-card"><div class="metric-label"><i class="ti ti-arrow-up-circle"></i> Saiu no mês</div><div class="metric-value" style="font-size:24px" id="m-despesas">R$ 0</div><div class="metric-delta" id="d-despesas"></div></div>
@@ -81,7 +87,7 @@
         <!-- A pagar / receber este mês -->
         <div class="card" id="card-projecao" style="margin-bottom:16px;display:none">
           <div class="card-header">
-            <div><div class="card-title">📅 A pagar / receber este mês</div><div class="card-sub" id="projecao-sub">Lançamentos em aberto — dê baixa quando pagar</div></div>
+            <div><div class="card-title">📅 A pagar / receber este mês</div><div class="card-sub" id="projecao-sub">Lançamentos em aberto do mês — gerencie na tela de Lançamentos</div></div>
           </div>
           <div id="lista-em-aberto" class="tx-list"></div>
         </div>
@@ -112,6 +118,14 @@
               <select id="filtro-tipo" onchange="renderLancamentos()"><option value="">Todos os tipos</option><option value="receita">Receitas</option><option value="despesa">Despesas</option></select>
               <select id="filtro-categoria" onchange="renderLancamentos()"><option value="">Todas as categorias</option></select>
               <input type="text" id="filtro-tag" placeholder="Tag..." style="padding:6px 10px;border-radius:8px;border:0.5px solid var(--border-light);font-size:13px;font-family:inherit;width:80px" oninput="renderLancamentos()">
+              <div style="display:flex;gap:6px;flex-wrap:wrap;width:100%;margin-bottom:8px">
+                <button class="btn filtro-rapido" id="fr-mes_atual" style="font-size:12px;padding:5px 10px" onclick="aplicarFiltroRapido('mes_atual')">Mês atual</button>
+                <button class="btn filtro-rapido" id="fr-mes_anterior" style="font-size:12px;padding:5px 10px" onclick="aplicarFiltroRapido('mes_anterior')">Mês anterior</button>
+                <button class="btn filtro-rapido" id="fr-mes_seguinte" style="font-size:12px;padding:5px 10px" onclick="aplicarFiltroRapido('mes_seguinte')">Mês seguinte</button>
+                <button class="btn filtro-rapido" id="fr-ultimos_3" style="font-size:12px;padding:5px 10px" onclick="aplicarFiltroRapido('ultimos_3')">Últimos 3 meses</button>
+                <button class="btn filtro-rapido" id="fr-ano_atual" style="font-size:12px;padding:5px 10px" onclick="aplicarFiltroRapido('ano_atual')">Ano atual</button>
+                <button class="btn" style="font-size:12px;padding:5px 10px;color:var(--text3)" onclick="limparFiltroRapido()"><i class="ti ti-x"></i> Limpar período</button>
+              </div>
               <input type="date" id="filtro-data-inicio" style="padding:6px 10px;border-radius:8px;border:0.5px solid var(--border-light);font-size:13px;font-family:inherit" onchange="renderLancamentos()">
               <input type="date" id="filtro-data-fim" style="padding:6px 10px;border-radius:8px;border:0.5px solid var(--border-light);font-size:13px;font-family:inherit" onchange="renderLancamentos()">
             </div>
@@ -126,7 +140,7 @@
             </div>
           </div>
           <table class="tx-table">
-            <thead><tr><th style="width:30px;text-align:center"><input type="checkbox" onchange="selecionarTodosLanc(this.checked)" title="Selecionar todos" style="width:14px;height:14px;cursor:pointer"></th><th>Data</th><th>Descrição</th><th>Categoria</th><th>Tipo</th><th>Valor</th><th>Status</th><th></th></tr></thead>
+            <thead><tr><th style="width:30px;text-align:center"><input type="checkbox" onchange="selecionarTodosLanc(this.checked)" title="Selecionar todos" style="width:14px;height:14px;cursor:pointer"></th><th class="th-sort" data-col="data" data-label="Data" style="cursor:pointer;user-select:none" onclick="ordenarPor('data')">Data ↓</th><th class="th-sort" data-col="descricao" data-label="Descrição" style="cursor:pointer;user-select:none" onclick="ordenarPor('descricao')">Descrição</th><th class="th-sort" data-col="categoria" data-label="Categoria" style="cursor:pointer;user-select:none" onclick="ordenarPor('categoria')">Categoria</th><th>Tipo</th><th class="th-sort" data-col="valor" data-label="Valor" style="cursor:pointer;user-select:none" onclick="ordenarPor('valor')">Valor</th><th>Status</th><th></th></tr></thead>
             <tbody id="tbody-lancamentos"></tbody>
           </table>
         </div>
@@ -255,6 +269,11 @@
 
       <!-- PATRIMÔNIO -->
       <div id="page-patrimonio" class="page">
+        <div id="aviso-backup" style="display:none;align-items:center;gap:10px;padding:10px 16px;background:#fef9c3;border:0.5px solid #fde047;border-radius:10px;margin-bottom:14px">
+          <i class="ti ti-alert-triangle" style="color:#a16207;font-size:18px"></i>
+          <span id="aviso-backup-texto" style="flex:1;font-size:13px;color:#713f12">—</span>
+          <button class="btn" style="font-size:12px;padding:5px 12px;background:#a16207;border-color:#a16207;color:#fff" onclick="exportarDados()"><i class="ti ti-database-export"></i> Fazer backup agora</button>
+        </div>
         <div class="metrics" style="grid-template-columns:repeat(3,1fr)">
           <div class="metric-card"><div class="metric-label">Patrimônio atual</div><div class="metric-value" id="pat-atual">R$ 0</div></div>
           <div class="metric-card"><div class="metric-label">Evolução este mês</div><div class="metric-value" id="pat-mes">R$ 0</div></div>
@@ -288,10 +307,12 @@
         <div class="card" style="margin-top:16px">
           <div class="card-title" style="margin-bottom:4px">Dados</div>
           <div class="card-sub" style="margin-bottom:16px">Exportar ou limpar dados do sistema</div>
-          <div style="display:flex;gap:8px">
-            <button class="btn" onclick="exportarDados()"><i class="ti ti-download"></i> Exportar JSON</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-accent" onclick="exportarDados()"><i class="ti ti-database-export"></i> Fazer backup</button>
+            <label class="btn" style="cursor:pointer"><i class="ti ti-database-import"></i> Restaurar backup<input type="file" accept=".json" style="display:none" onchange="restaurarBackup(this)"></label>
             <button class="btn" style="color:var(--red);border-color:var(--red)" onclick="limparDados()"><i class="ti ti-trash"></i> Limpar tudo</button>
           </div>
+          <div style="font-size:12px;color:var(--text2);margin-top:10px">💡 Seus dados vivem no navegador. Faça backup semanalmente e guarde o arquivo no Google Drive ou e-mail. Para restaurar em outro computador, use "Restaurar backup".</div>
         </div>
       </div>
 
