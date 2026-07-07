@@ -59,6 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
   try { renderLancamentos(); } catch(e) { console.error('renderLancamentos:', e); }
   try { atualizarBannerValidacao(); } catch(e) { console.error('banner:', e); }
   try { atualizarLembreteBackup(); } catch(e) { console.error('backup:', e); }
+  try { aplicarTemaSalvo(); } catch(e) { console.error('tema:', e); }
 });
 
 // ========================
@@ -226,6 +227,22 @@ function carregarDB() {
 // ========================
 // NAVEGAÇÃO
 // ========================
+function alternarTema() {
+  const escuro = document.body.classList.toggle('dark');
+  localStorage.setItem('tema', escuro ? 'dark' : 'light');
+  const icone = document.querySelector('#btn-tema i');
+  if (icone) icone.className = escuro ? 'ti ti-sun' : 'ti ti-moon';
+}
+
+function aplicarTemaSalvo() {
+  const tema = localStorage.getItem('tema');
+  if (tema === 'dark') {
+    document.body.classList.add('dark');
+    const icone = document.querySelector('#btn-tema i');
+    if (icone) icone.className = 'ti ti-sun';
+  }
+}
+
 function showPage(id) {
   try {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -245,11 +262,20 @@ function showPage(id) {
     const titleEl = document.getElementById('page-title');
     if (titleEl) titleEl.textContent = titles[id] || id;
 
+    // Subtítulo: mês vigente formatado (ex: "Julho 2026") em todos os módulos
+    const subEl = document.getElementById('page-sub');
+    if (subEl) {
+      const [y, m] = mesAtual.split('-').map(Number);
+      const label = new Date(y, m - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+      subEl.textContent = label.charAt(0).toUpperCase() + label.slice(1);
+    }
+
     if (id === 'dashboard') renderDashboard();
     if (id === 'lancamentos') renderLancamentos();
     if (id === 'dre') { try { preencherDREmeses(); renderDRE(); } catch(e) { console.error('DRE:', e); } }
     if (id === 'planocontas') { renderPlanoContas(); renderRegras(); }
     if (id === 'patrimonio') renderPatrimonio();
+    if (id === 'importar') { try { renderImportacoes(); } catch(e) {} }
   } catch(e) {
     console.error('showPage error:', e);
   }
@@ -341,7 +367,8 @@ function renderDashboard() {
   // Entrou/Saiu = regime de caixa (só o que já foi pago)
   const receitas = lancsMes.filter(l => l.tipo === 'receita' && isPago(l)).reduce((a, b) => a + b.valor, 0);
   const despesas = lancsMes.filter(l => l.tipo === 'despesa' && isPago(l)).reduce((a, b) => a + b.valor, 0);
-  // Fechamento projetado = pagos + em abertos do mês
+  const investimentos = lancsMes.filter(l => l.tipo === 'investimento' && isPago(l)).reduce((a, b) => a + b.valor, 0);
+  // Fechamento projetado = pagos + em abertos do mês (investimento não conta como gasto: é alocação de patrimônio)
   const recAberto = lancsMes.filter(l => l.tipo === 'receita' && !isPago(l)).reduce((a, b) => a + b.valor, 0);
   const despAberto = lancsMes.filter(l => l.tipo === 'despesa' && !isPago(l)).reduce((a, b) => a + b.valor, 0);
   const sobra = (receitas + recAberto) - (despesas + despAberto);
@@ -355,6 +382,8 @@ function renderDashboard() {
 
   document.getElementById('m-receitas').textContent = fmt(receitas);
   document.getElementById('m-despesas').textContent = fmt(despesas);
+  const elInv = document.getElementById('m-investimentos');
+  if (elInv) elInv.textContent = fmt(investimentos);
   const elSobraM = document.getElementById('m-sobra');
   elSobraM.textContent = (sobra < 0 ? '- ' : '') + fmt(sobra);
   elSobraM.style.color = sobra < 0 ? '#f87171' : '';
@@ -442,6 +471,7 @@ function renderDashboard() {
   }
 
   renderChartPatrimonio();
+  try { renderGraficoMensal(); } catch(e) { console.error('grafico:', e); }
 }
 
 function buildTxItem(l) {
@@ -452,11 +482,12 @@ function buildTxItem(l) {
     ? '<span class="tx-badge badge-validado">validado</span>'
     : '<span class="tx-badge badge-interno">interno</span>';
   const badgeConciliado = l.conciliado ? '<span class="tx-badge" style="background:#cffafe;color:#0e7490">🔗 conciliado</span>' : '';
-  const amtClass = isInterno ? 'neu' : l.tipo === 'receita' ? 'pos' : 'neg';
-  const amtPrefix = isInterno ? '' : l.tipo === 'receita' ? '+ ' : '- ';
-  const cor = isInterno ? '#f1f5f9' : l.tipo === 'receita' ? '#dcfce7' : '#fef3c7';
-  const iconCor = isInterno ? '#94a3b8' : l.tipo === 'receita' ? '#16a34a' : '#d97706';
-  const icon = isInterno ? 'ti-transfer' : l.tipo === 'receita' ? 'ti-arrow-down' : 'ti-arrow-up';
+  const isInvest = l.tipo === 'investimento';
+  const amtClass = isInterno ? 'neu' : l.tipo === 'receita' ? 'pos' : isInvest ? 'inv' : 'neg';
+  const amtPrefix = isInterno ? '' : l.tipo === 'receita' ? '+ ' : isInvest ? '~ ' : '- ';
+  const cor = isInterno ? '#f1f5f9' : l.tipo === 'receita' ? '#dcfce7' : isInvest ? '#dbeafe' : '#fef3c7';
+  const iconCor = isInterno ? '#94a3b8' : l.tipo === 'receita' ? '#16a34a' : isInvest ? '#2563eb' : '#d97706';
+  const icon = isInterno ? 'ti-transfer' : l.tipo === 'receita' ? 'ti-arrow-down' : isInvest ? 'ti-trending-up' : 'ti-arrow-up';
   const catNome = isInterno
     ? '<span class="tag-interno"><i class="ti ti-arrows-exchange"></i> Movimentação interna</span>'
     : getNomeCat(l.categoria) + (l.subcategoria ? ' › ' + l.subcategoria : '');
@@ -467,6 +498,100 @@ function buildTxItem(l) {
     '<div class="tx-cat">' + catNome + (tags ? ' ' + tags : '') + '</div></div>' +
     '<div class="tx-right"><div class="tx-amount ' + amtClass + '">' + amtPrefix + fmt(l.valor) + '</div>' +
     '<div class="tx-date">' + formatarData(l.data) + '</div></div></div>';
+}
+
+// ========================
+// GRÁFICO MENSAL INTERATIVO
+// ========================
+function renderGraficoMensal() {
+  const el = document.getElementById('grafico-mensal');
+  if (!el) return;
+  const tipo = document.getElementById('grafico-tipo')?.value || 'despesa';
+  const nMeses = parseInt(document.getElementById('grafico-periodo')?.value || '6');
+  const isPago = l => (l.situacao || 'pago') === 'pago';
+
+  // Monta lista de meses (do mais antigo ao atual)
+  const meses = [];
+  const base = new Date(mesAtual + '-01');
+  for (let i = nMeses - 1; i >= 0; i--) {
+    const d = new Date(base.getFullYear(), base.getMonth() - i, 1);
+    meses.push(d.toISOString().slice(0, 7));
+  }
+
+  const dados = meses.map(m => {
+    const total = DB.lancamentos
+      .filter(l => l.tipo === tipo && isPago(l) && l.data.slice(0, 7) === m)
+      .reduce((a, b) => a + b.valor, 0);
+    return { mes: m, total };
+  });
+
+  const maxVal = Math.max(...dados.map(d => d.total), 1);
+  const cor = tipo === 'receita' ? '#16a34a' : tipo === 'investimento' ? '#2563eb' : '#d97706';
+  const larguraBarra = 100 / dados.length;
+  const alturaMax = 220;
+
+  let svg = '<svg viewBox="0 0 ' + (dados.length * 80) + ' 280" style="width:100%;min-width:' + (dados.length * 60) + 'px;height:280px;font-family:inherit">';
+  dados.forEach((d, i) => {
+    const altura = d.total > 0 ? (d.total / maxVal) * alturaMax : 0;
+    const x = i * 80 + 15;
+    const y = alturaMax - altura + 20;
+    const [ano, mesN] = d.mes.split('-');
+    const nomeMs = new Date(ano, mesN - 1).toLocaleDateString('pt-BR', { month: 'short' });
+    svg += '<g style="cursor:pointer" onclick="abrirDetalheMes(\'' + d.mes + '\',\'' + tipo + '\')">';
+    svg += '<rect x="' + x + '" y="20" width="50" height="' + alturaMax + '" fill="transparent"></rect>'; // área clicável
+    svg += '<rect x="' + x + '" y="' + y + '" width="50" height="' + altura + '" rx="4" fill="' + cor + '" opacity="0.85"><title>' + fmt(d.total) + '</title></rect>';
+    if (d.total > 0) svg += '<text x="' + (x + 25) + '" y="' + (y - 6) + '" text-anchor="middle" font-size="11" fill="var(--text2)">' + (d.total >= 1000 ? 'R$ ' + (d.total/1000).toFixed(1) + 'k' : fmt(d.total).replace('R$ ', '')) + '</text>';
+    svg += '<text x="' + (x + 25) + '" y="' + (alturaMax + 40) + '" text-anchor="middle" font-size="11" fill="var(--text3)">' + nomeMs + '/' + ano.slice(2) + '</text>';
+    svg += '</g>';
+  });
+  svg += '</svg>';
+  el.innerHTML = svg;
+}
+
+function abrirDetalheMes(mes, tipo) {
+  const isPago = l => (l.situacao || 'pago') === 'pago';
+  const itens = DB.lancamentos
+    .filter(l => l.tipo === tipo && isPago(l) && l.data.slice(0, 7) === mes)
+    .sort((a, b) => b.valor - a.valor);
+  const [ano, mesN] = mes.split('-');
+  const nomeMs = new Date(ano, mesN - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  const total = itens.reduce((a, b) => a + b.valor, 0);
+  const tipoLabel = tipo === 'receita' ? 'Receitas' : tipo === 'investimento' ? 'Investimentos' : 'Despesas';
+
+  document.getElementById('detalhe-mes-titulo').textContent = tipoLabel + ' · ' + nomeMs.charAt(0).toUpperCase() + nomeMs.slice(1);
+  document.getElementById('detalhe-mes-total').textContent = fmt(total);
+
+  // Agrupa por categoria
+  const porCat = {};
+  itens.forEach(l => { porCat[l.categoria] = (porCat[l.categoria] || 0) + l.valor; });
+  const cats = Object.entries(porCat).sort((a, b) => b[1] - a[1]);
+
+  const corpo = document.getElementById('detalhe-mes-corpo');
+  if (!itens.length) {
+    corpo.innerHTML = '<div style="text-align:center;color:var(--text3);padding:20px">Nenhum lançamento neste mês</div>';
+  } else {
+    corpo.innerHTML =
+      '<div style="margin-bottom:14px">' +
+        cats.map(([cat, val]) => {
+          const pct = ((val / total) * 100).toFixed(1);
+          return '<div style="display:flex;align-items:center;gap:10px;padding:6px 0">' +
+            '<div style="width:10px;height:10px;border-radius:50%;background:' + getCor(cat) + ';flex-shrink:0"></div>' +
+            '<span style="flex:1;font-size:13px">' + getNomeCat(cat) + '</span>' +
+            '<span style="font-size:12px;color:var(--text3)">' + pct + '%</span>' +
+            '<span style="font-size:13px;font-weight:500;min-width:90px;text-align:right">' + fmt(val) + '</span>' +
+          '</div>';
+        }).join('') +
+      '</div>' +
+      '<div style="border-top:0.5px solid var(--border-light);padding-top:10px;font-size:12px;color:var(--text2);font-weight:500;margin-bottom:8px">Todos os lançamentos (' + itens.length + ')</div>' +
+      itens.map(l =>
+        '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:0.5px solid var(--border-light2)">' +
+          '<span style="font-size:11px;color:var(--text3);min-width:50px">' + formatarData(l.data) + '</span>' +
+          '<span style="flex:1;font-size:12px">' + l.descricao + '</span>' +
+          '<span style="font-size:12px;font-weight:500">' + fmt(l.valor) + '</span>' +
+        '</div>'
+      ).join('');
+  }
+  document.getElementById('modal-detalhe-mes').style.display = 'flex';
 }
 
 function renderChartPatrimonio() {
@@ -587,8 +712,9 @@ function renderLancamentos() {
       ? '<span class="tx-badge" style="background:#fef9c3;color:#a16207">○ Em aberto</span>'
       : '<span class="tx-badge" style="background:#dcfce7;color:#166534">✓ Pago</span>';
     const fpgto = l.formaPagamento ? '<span style="font-size:10px;color:var(--text3)"> · ' + (nomesFormaPgto[l.formaPagamento] || l.formaPagamento) + '</span>' : '';
-    const amtClass = isInterno ? 'neu' : l.tipo === 'receita' ? 'pos' : 'neg';
-    const amtPrefix = isInterno ? '' : l.tipo === 'receita' ? '+' : '-';
+    const isInvest = l.tipo === 'investimento';
+    const amtClass = isInterno ? 'neu' : l.tipo === 'receita' ? 'pos' : isInvest ? 'inv' : 'neg';
+    const amtPrefix = isInterno ? '' : l.tipo === 'receita' ? '+' : isInvest ? '~' : '-';
     const subcatStr = l.subcategoria ? ' › ' + l.subcategoria : '';
     const tagsStr = (l.tags||[]).map(t=>'<span class="tag-pill">'+t+'</span>').join('');
     tbody.innerHTML += '<tr' + (emAberto ? ' style="background:#fffdf0"' : '') + '>' +
@@ -598,7 +724,7 @@ function renderLancamentos() {
       '<td>' + (isInterno ? '<span class="tag-interno">Interno</span>' : getNomeCat(l.categoria) + subcatStr) + '</td>' +
       '<td><span style="text-transform:capitalize">' + l.tipo + '</span></td>' +
       '<td class="tx-amount ' + amtClass + '">' + amtPrefix + ' ' + fmt(l.valor) + '</td>' +
-      '<td>' + badgeSituacao + ' ' + badge + '</td>' +
+      '<td><div class="status-cell">' + badgeSituacao + badge + '</div></td>' +
       '<td>' +
         (emAberto ? '<button class="btn" style="font-size:11px;padding:4px 8px;color:#16a34a;border-color:#86efac" title="Marcar como pago" onclick="darBaixaLancamento(\'' + l.id + '\')"><i class="ti ti-check"></i></button> ' : '') +
         (l.status === 'pendente' ? '<button class="btn" style="font-size:11px;padding:4px 8px" onclick="abrirValidar(\'' + l.id + '\')">Validar</button> ' : '') +'<button class="btn" style="font-size:11px;padding:4px 8px" onclick="abrirEditar(\'' + l.id + '\')"><i class="ti ti-pencil"></i></button> ' +
@@ -715,8 +841,9 @@ function buscarGlobal(query) {
   lista.forEach(l => {
     const isInterno = l.tipo === 'interno';
     const badge = l.status === 'pendente' ? '<span class="tx-badge badge-pendente">revisar</span>' : isInterno ? '<span class="tx-badge badge-interno">interno</span>' : '<span class="tx-badge badge-validado">validado</span>';
-    const amtClass = isInterno ? 'neu' : l.tipo === 'receita' ? 'pos' : 'neg';
-    const amtPrefix = isInterno ? '' : l.tipo === 'receita' ? '+' : '-';
+    const isInvest = l.tipo === 'investimento';
+    const amtClass = isInterno ? 'neu' : l.tipo === 'receita' ? 'pos' : isInvest ? 'inv' : 'neg';
+    const amtPrefix = isInterno ? '' : l.tipo === 'receita' ? '+' : isInvest ? '~' : '-';
     const subcatStr = l.subcategoria ? ' › ' + l.subcategoria : '';
     const tagsStr = (l.tags||[]).map(t=>'<span class="tag-pill">'+t+'</span>').join('');
     tbody.innerHTML += '<tr>' +
@@ -1240,14 +1367,14 @@ function renderSeletorTags(containerId, selecionadas) {
   const el = document.getElementById(containerId);
   if (!el) return;
   if (!DB.tags.length) {
-    el.innerHTML = '<span style="font-size:12px;color:var(--text3)">Nenhuma tag cadastrada. Crie em Plano de Contas → Tags.</span>';
+    el.innerHTML = '<span style="font-size:12px;color:var(--text3)">Nenhuma tag ainda — crie em Plano de Contas → aba Tags</span>';
     return;
   }
   el.innerHTML = DB.tags.map(tag =>
-    '<label style="display:inline-flex;align-items:center;gap:5px;margin:3px 4px 3px 0;cursor:pointer;padding:3px 8px;border-radius:99px;border:0.5px solid '+(selecionadas.includes(tag.nome)?tag.cor:'var(--border-light)')+';background:'+(selecionadas.includes(tag.nome)?tag.cor+'22':'transparent')+'">' +
+    '<label style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;padding:4px 10px;border-radius:99px;border:1px solid '+(selecionadas.includes(tag.nome)?tag.cor:'var(--border-light)')+';background:'+(selecionadas.includes(tag.nome)?tag.cor+'22':'var(--card)')+';transition:all 0.12s">' +
       '<input type="checkbox" value="'+tag.nome+'" '+(selecionadas.includes(tag.nome)?'checked':'')+' style="display:none" onchange="sincronizarTagsSeletor(\''+containerId+'\')">' +
-      '<span style="width:7px;height:7px;border-radius:50%;background:'+tag.cor+'"></span>' +
-      '<span style="font-size:12px;color:'+(selecionadas.includes(tag.nome)?tag.cor:'var(--text2)')+'">'+tag.nome+'</span>' +
+      '<span style="width:8px;height:8px;border-radius:50%;background:'+tag.cor+'"></span>' +
+      '<span style="font-size:12px;font-weight:'+(selecionadas.includes(tag.nome)?'600':'400')+';color:'+(selecionadas.includes(tag.nome)?tag.cor:'var(--text2)')+'">'+tag.nome+'</span>' +
     '</label>'
   ).join('');
 }
@@ -1573,7 +1700,9 @@ function salvarImportacao() {
     aImportar.push(l);
   });
 
-  aImportar.forEach(l => { if (!l.situacao) l.situacao = 'pago'; });
+  const loteImp = 'imp_' + Date.now().toString(36);
+  const loteData = new Date().toLocaleString('pt-BR');
+  aImportar.forEach(l => { if (!l.situacao) l.situacao = 'pago'; l.loteImportacao = loteImp; l.loteData = loteData; });
   DB.lancamentos.push(...aImportar);
   salvarDB();
   document.getElementById('preview-importacao').style.display = 'none';
@@ -1948,12 +2077,19 @@ function salvarNovaOuEditadaCategoria() {
   const nome = document.getElementById('edit-cat-nome').value.trim();
   const codigo = document.getElementById('edit-cat-codigo').value.trim();
   const cor = document.getElementById('edit-cat-cor').value;
-  const natureza = document.getElementById('edit-cat-natureza').value;
+  const natureza = document.getElementById('edit-cat-natureza').value || 'despesa';
   if (!nome) { toast('Informe o nome'); return; }
   const id = nome.toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'') + '_' + Date.now().toString(36);
   DB.categorias.push({ id, nome, cor, codigo, natureza, subcats: [] });
-  salvarDB(); fecharModal('modal-edit-cat'); preencherSelects(); renderPlanoContas();
-  toast('Categoria criada!');
+  salvarDB(); fecharModal('modal-edit-cat'); preencherSelects();
+  // Muda para a aba da natureza criada, para a categoria aparecer na hora
+  planoNaturezaAtiva = natureza;
+  document.querySelectorAll('#plano-natureza-tabs .tab').forEach(t => t.classList.remove('active'));
+  const abas = { receita: 0, despesa: 1, investimento: 2 };
+  const abaAlvo = document.querySelectorAll('#plano-natureza-tabs .tab')[abas[natureza]];
+  if (abaAlvo) abaAlvo.classList.add('active');
+  renderPlanoContas();
+  toast('Categoria "' + nome + '" criada em ' + (natureza === 'receita' ? 'Receitas' : natureza === 'investimento' ? 'Investimentos' : 'Despesas') + '!');
 }
 
 function excluirCategoria(id) {
@@ -2170,7 +2306,8 @@ function getCategoriasPorTipo(tipo) {
   // Filtra pelo campo natureza de cada categoria (não mais por lista fixa de IDs)
   const getNat = c => c.natureza || (c.id === 'outros' ? 'todas' : c.id.startsWith('rec_') ? 'receita' : c.id.startsWith('inv_') ? 'investimento' : 'despesa');
   if (tipo === 'receita') return DB.categorias.filter(c => { const n = getNat(c); return n === 'receita' || n === 'todas'; }).map(c => c.id);
-  if (tipo === 'investimento' || tipo === 'interno') return DB.categorias.filter(c => { const n = getNat(c); return n === 'investimento' || n === 'todas'; }).map(c => c.id);
+  if (tipo === 'investimento') return DB.categorias.filter(c => { const n = getNat(c); return n === 'investimento' || n === 'todas'; }).map(c => c.id);
+  if (tipo === 'interno') return DB.categorias.filter(c => { const n = getNat(c); return n === 'investimento' || n === 'todas'; }).map(c => c.id);
   if (tipo === 'despesa') return DB.categorias.filter(c => { const n = getNat(c); return n === 'despesa' || n === 'todas'; }).map(c => c.id);
   return DB.categorias.map(c => c.id);
 }
@@ -2282,6 +2419,46 @@ function atualizarLembreteBackup() {
   } else {
     aviso.style.display = 'none';
   }
+}
+
+function renderImportacoes() {
+  const el = document.getElementById('lista-importacoes');
+  if (!el) return;
+  // Agrupa lançamentos por lote
+  const lotes = {};
+  DB.lancamentos.forEach(l => {
+    if (!l.loteImportacao) return;
+    if (!lotes[l.loteImportacao]) lotes[l.loteImportacao] = { data: l.loteData, origem: l.origem, itens: [], total: 0 };
+    lotes[l.loteImportacao].itens.push(l);
+    lotes[l.loteImportacao].total += l.valor;
+  });
+  const chaves = Object.keys(lotes);
+  if (!chaves.length) {
+    el.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:12px 0">Nenhuma importação registrada ainda.</div>';
+    return;
+  }
+  el.innerHTML = chaves.map(k => {
+    const lote = lotes[k];
+    return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:0.5px solid var(--border-light2)">' +
+      '<div style="flex:1">' +
+        '<div style="font-size:13px;font-weight:500">' + (lote.origem || 'Importação') + ' · ' + lote.itens.length + ' lançamentos</div>' +
+        '<div style="font-size:11px;color:var(--text3)">' + (lote.data || '') + ' · total ' + fmt(lote.total) + '</div>' +
+      '</div>' +
+      '<button class="btn" style="font-size:11px;padding:4px 10px;color:var(--red);border-color:var(--red)" onclick="apagarImportacao(\'' + k + '\')"><i class="ti ti-trash"></i> Apagar</button>' +
+    '</div>';
+  }).join('');
+}
+
+function apagarImportacao(loteId) {
+  const itens = DB.lancamentos.filter(l => l.loteImportacao === loteId);
+  if (!itens.length) return;
+  if (!confirm('Apagar esta importação inteira?\n\n' + itens.length + ' lançamentos serão removidos. Essa ação não pode ser desfeita.')) return;
+  DB.lancamentos = DB.lancamentos.filter(l => l.loteImportacao !== loteId);
+  salvarDB();
+  renderImportacoes();
+  renderDashboard();
+  try { renderLancamentos(); } catch(e) {}
+  toast(itens.length + ' lançamentos da importação removidos');
 }
 
 function limparDados() {
