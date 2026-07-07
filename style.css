@@ -21,6 +21,24 @@
   --yellow-text: #a16207;
 }
 
+/* TEMA ESCURO */
+body.dark {
+  --bg: #0f172a;
+  --card: #1e293b;
+  --text: #e2e8f0;
+  --text2: #94a3b8;
+  --text3: #64748b;
+  --border-light: #334155;
+  --border-light2: #1e293b;
+  --green-bg: #14532d;
+  --yellow-bg: #422006;
+  --yellow-text: #fde047;
+}
+body.dark .tx-badge.badge-validado { background: #14532d !important; color: #86efac !important; }
+body.dark .tag-pill { background: rgba(79,156,249,0.15); color: #93c5fd; }
+body.dark input, body.dark select, body.dark textarea { background: #0f172a; color: var(--text); }
+body.dark .metric-card { background: #1e293b; }
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
@@ -239,9 +257,13 @@ body {
   border-bottom: 0.5px solid var(--border-light);
   text-transform: uppercase; letter-spacing: 0.04em;
 }
-.tx-table td { padding: 10px 12px; border-bottom: 0.5px solid var(--border-light2); }
+.tx-table td { padding: 12px; border-bottom: 0.5px solid var(--border-light2); height: 52px; vertical-align: middle; }
 .tx-table tr:last-child td { border-bottom: none; }
 .tx-table tr:hover td { background: var(--bg); }
+.tx-name { color: var(--text); }
+/* Badges de status empilhados com respiro */
+.tx-table td .tx-badge { display: inline-block; margin: 1px 2px; }
+.status-cell { display: flex; flex-direction: column; gap: 3px; align-items: flex-start; }
 
 /* FILTERS */
 .filters { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -440,3 +462,4 @@ body {
 .dre-resultado td:first-child { position: sticky; left: 0; background: var(--dark); z-index: 1; }
 .dre-resultado .dre-pos { color: #4ade80; }
 .dre-resultado .dre-neg { color: #f87171; }
+.tx-amount.inv { color: #2563eb; }
