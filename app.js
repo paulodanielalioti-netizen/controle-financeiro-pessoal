@@ -40,8 +40,24 @@ let DB = {
   tags: [],
   ignorados: [],
   previstos: [],
+  formasPagamento: [],
   config: { nome: 'Paulo Alioti', meta: 1000000 }
 };
+
+// Seed padrão de formas de pagamento (usado na 1ª carga e na migração v7)
+const FORMAS_PGTO_SEED = [
+  { id: 'fp_credito',  nome: 'Cartão de Crédito', tipo: 'cartao', fechamento: 1,  vencimento: 10 },
+  { id: 'fp_xp',       nome: 'XP',                tipo: 'conta',  fechamento: null, vencimento: null },
+  { id: 'fp_inter',    nome: 'Inter',             tipo: 'conta',  fechamento: null, vencimento: null },
+  { id: 'fp_cea',      nome: 'C&A',               tipo: 'cartao', fechamento: null, vencimento: null },
+  { id: 'fp_hipercard',nome: 'Hipercard',         tipo: 'cartao', fechamento: null, vencimento: null },
+  { id: 'fp_pix',      nome: 'Pix',               tipo: 'outro',  fechamento: null, vencimento: null },
+  { id: 'fp_debito',   nome: 'Cartão de Débito',  tipo: 'outro',  fechamento: null, vencimento: null },
+  { id: 'fp_dinheiro', nome: 'Dinheiro',          tipo: 'outro',  fechamento: null, vencimento: null },
+  { id: 'fp_transf',   nome: 'Transferência',     tipo: 'outro',  fechamento: null, vencimento: null },
+  { id: 'fp_boleto',   nome: 'Boleto',            tipo: 'outro',  fechamento: null, vencimento: null },
+];
+DB.formasPagamento = JSON.parse(JSON.stringify(FORMAS_PGTO_SEED));
 
 let chartPatrimonio = null;
 let chartPatrimonioFull = null;
@@ -54,6 +70,7 @@ let mesAtual = new Date().toISOString().slice(0, 7);
 document.addEventListener('DOMContentLoaded', () => {
   try { carregarDB(); } catch(e) { console.error('carregarDB:', e); }
   try { preencherSelects(); } catch(e) { console.error('preencherSelects:', e); }
+  try { atualizarFiltroCatGrafico(); } catch(e) { console.error('filtroCatGrafico:', e); }
   try { renderSeletorTags('manual-tags-seletor', []); } catch(e) { console.error('seletorTags:', e); }
   try { renderDashboard(); } catch(e) { console.error('renderDashboard:', e); }
   try { renderLancamentos(); } catch(e) { console.error('renderLancamentos:', e); }
@@ -81,6 +98,9 @@ function carregarDB() {
       DB.tags = parsed.tags || [];
       DB.ignorados = parsed.ignorados || [];
       DB.previstos = parsed.previstos || [];
+      if (parsed.formasPagamento && parsed.formasPagamento.length) {
+        DB.formasPagamento = parsed.formasPagamento;
+      }
       DB.config = { ...DB.config, ...(parsed.config || {}) };
       if (parsed.categorias && parsed.categorias.length) {
         DB.categorias = parsed.categorias.map(pc => {
@@ -220,6 +240,24 @@ function carregarDB() {
         salvarDB();
         console.log('Migração v6 — Transporte unificado');
       }
+      // Migração v7 — formas de pagamento viram entidade editável; valores antigos mapeados para IDs
+      if (!parsed.migradoV7) {
+        // 1. Garante o seed (se o backup não tinha formasPagamento)
+        if (!DB.formasPagamento || !DB.formasPagamento.length) {
+          DB.formasPagamento = JSON.parse(JSON.stringify(FORMAS_PGTO_SEED));
+        }
+        // 2. Mapeia strings antigas dos lançamentos para os novos IDs
+        const mapaFP = {
+          'credito': 'fp_credito', 'debito': 'fp_debito', 'pix': 'fp_pix',
+          'dinheiro': 'fp_dinheiro', 'transferencia': 'fp_transf', 'boleto': 'fp_boleto'
+        };
+        DB.lancamentos.forEach(l => {
+          if (l.formaPagamento && mapaFP[l.formaPagamento]) l.formaPagamento = mapaFP[l.formaPagamento];
+        });
+        DB.migradoV7 = true;
+        salvarDB();
+        console.log('Migração v7 — formas de pagamento como entidade');
+      }
     } catch(e) { console.error('Erro ao carregar DB', e); }
   }
 }
@@ -245,18 +283,20 @@ function aplicarTemaSalvo() {
 
 function showPage(id) {
   try {
+    // Alias legado: Plano de Contas agora vive dentro de Configurações
+    if (id === 'planocontas') id = 'configuracoes';
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
     const pg = document.getElementById('page-' + id);
     if (pg) pg.classList.add('active');
 
-    const navMap = { dashboard:0, lancamentos:1, dre:2, planocontas:3, patrimonio:4, importar:5, configuracoes:6 };
+    const navMap = { dashboard:0, lancamentos:1, dre:2, patrimonio:3, importar:4, configuracoes:5 };
     const items = document.querySelectorAll('.nav-item');
     if (items[navMap[id]]) items[navMap[id]].classList.add('active');
 
     const titles = {
       dashboard:'Dashboard', lancamentos:'Lançamentos', importar:'Conferência Mensal',
-      dre:'DRE', planocontas:'Plano de Contas', patrimonio:'Patrimônio',
+      dre:'DRE', patrimonio:'Patrimônio',
       configuracoes:'Configurações'
     };
     const titleEl = document.getElementById('page-title');
@@ -273,9 +313,14 @@ function showPage(id) {
     if (id === 'dashboard') renderDashboard();
     if (id === 'lancamentos') renderLancamentos();
     if (id === 'dre') { try { preencherDREmeses(); renderDRE(); } catch(e) { console.error('DRE:', e); } }
-    if (id === 'planocontas') { renderPlanoContas(); renderRegras(); }
     if (id === 'patrimonio') renderPatrimonio();
     if (id === 'importar') { try { renderImportacoes(); } catch(e) {} }
+    if (id === 'configuracoes') {
+      try { renderPlanoContas(); } catch(e) { console.error('planocontas:', e); }
+      try { renderFormasPagamento(); } catch(e) { console.error('formas:', e); }
+      try { renderTags(); } catch(e) { console.error('tags:', e); }
+      try { renderRegras(); } catch(e) { console.error('regras:', e); }
+    }
   } catch(e) {
     console.error('showPage error:', e);
   }
@@ -304,6 +349,24 @@ function getNomeCat(catId) {
 function getSubcats(catId) {
   const cat = DB.categorias.find(c => c.id === catId);
   return cat ? (cat.subcats || []) : [];
+}
+function getFormaPgto(id) {
+  return (DB.formasPagamento || []).find(f => f.id === id);
+}
+function getNomeFormaPgto(id) {
+  if (!id) return '';
+  const f = getFormaPgto(id);
+  if (f) return f.nome;
+  // Compatibilidade com valores antigos que possam ter escapado da migração
+  const legado = { credito: 'Cartão de Crédito', debito: 'Cartão de Débito', pix: 'Pix', dinheiro: 'Dinheiro', transferencia: 'Transferência', boleto: 'Boleto' };
+  return legado[id] || id;
+}
+function preencherSelectFormaPgto(selectId, valorAtual, placeholder) {
+  const el = document.getElementById(selectId); if (!el) return;
+  el.innerHTML = '<option value="">' + (placeholder || '—') + '</option>' +
+    (DB.formasPagamento || []).map(f =>
+      '<option value="' + f.id + '"' + (f.id === valorAtual ? ' selected' : '') + '>' + f.nome + '</option>'
+    ).join('');
 }
 function toast(msg) {
   const t = document.getElementById('toast');
@@ -413,7 +476,7 @@ function renderDashboard() {
     : lancsMes;
 
   const subEl = document.getElementById('dash-tag-sub');
-  if (subEl) subEl.textContent = dashTag ? 'Tag: ' + dashTag : 'vs orçamento';
+  if (subEl) subEl.textContent = (dashTag ? 'Tag: ' + dashTag : 'vs orçamento') + ' · Clique para ver os lançamentos';
 
   // Gastos por categoria
   const porCat = {};
@@ -428,7 +491,7 @@ function renderDashboard() {
     const pct = orc > 0 ? Math.min(Math.round((val / orc) * 100), 100) : Math.round((val / maxVal) * 100);
     const corBarra = orc > 0 && val > orc ? '#ef4444' : getCor(cat);
     const orcLabel = orc > 0 && !dashTag ? '<span style="font-size:10px;color:var(--text3);margin-left:4px">/ ' + fmt(orc) + '</span>' : '';
-    listaCats.innerHTML += '<div class="cat-item">' +
+    listaCats.innerHTML += '<div class="cat-item" style="cursor:pointer" title="Clique para ver os lançamentos" onclick="abrirDetalheCategoria(\'' + cat + '\')">' +
       '<span class="cat-label">' + getNomeCat(cat) + '</span>' +
       '<div class="cat-bar-bg"><div class="cat-bar" style="width:' + pct + '%;background:' + corBarra + '"></div></div>' +
       '<span class="cat-value">' + fmt(val) + orcLabel + '</span>' +
@@ -472,6 +535,9 @@ function renderDashboard() {
 
   renderChartPatrimonio();
   try { renderGraficoMensal(); } catch(e) { console.error('grafico:', e); }
+  try { renderPrevistoRealizado(); } catch(e) { console.error('previsto:', e); }
+  try { renderFaturaCartao(); } catch(e) { console.error('fatura:', e); }
+  try { renderGastosPorForma(); } catch(e) { console.error('gastosForma:', e); }
 }
 
 function buildTxItem(l) {
@@ -508,7 +574,10 @@ function renderGraficoMensal() {
   if (!el) return;
   const tipo = document.getElementById('grafico-tipo')?.value || 'despesa';
   const nMeses = parseInt(document.getElementById('grafico-periodo')?.value || '6');
+  const filtroCat = document.getElementById('grafico-categoria')?.value || '';
+  const filtroSubcat = document.getElementById('grafico-subcategoria')?.value || '';
   const isPago = l => (l.situacao || 'pago') === 'pago';
+  const passaFiltro = l => (!filtroCat || l.categoria === filtroCat) && (!filtroSubcat || l.subcategoria === filtroSubcat);
 
   // Monta lista de meses (do mais antigo ao atual)
   const meses = [];
@@ -520,7 +589,7 @@ function renderGraficoMensal() {
 
   const dados = meses.map(m => {
     const total = DB.lancamentos
-      .filter(l => l.tipo === tipo && isPago(l) && l.data.slice(0, 7) === m)
+      .filter(l => l.tipo === tipo && isPago(l) && l.data.slice(0, 7) === m && passaFiltro(l))
       .reduce((a, b) => a + b.valor, 0);
     return { mes: m, total };
   });
@@ -550,13 +619,17 @@ function renderGraficoMensal() {
 
 function abrirDetalheMes(mes, tipo) {
   const isPago = l => (l.situacao || 'pago') === 'pago';
+  const filtroCat = document.getElementById('grafico-categoria')?.value || '';
+  const filtroSubcat = document.getElementById('grafico-subcategoria')?.value || '';
   const itens = DB.lancamentos
-    .filter(l => l.tipo === tipo && isPago(l) && l.data.slice(0, 7) === mes)
+    .filter(l => l.tipo === tipo && isPago(l) && l.data.slice(0, 7) === mes &&
+      (!filtroCat || l.categoria === filtroCat) && (!filtroSubcat || l.subcategoria === filtroSubcat))
     .sort((a, b) => b.valor - a.valor);
   const [ano, mesN] = mes.split('-');
   const nomeMs = new Date(ano, mesN - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
   const total = itens.reduce((a, b) => a + b.valor, 0);
-  const tipoLabel = tipo === 'receita' ? 'Receitas' : tipo === 'investimento' ? 'Investimentos' : 'Despesas';
+  let tipoLabel = tipo === 'receita' ? 'Receitas' : tipo === 'investimento' ? 'Investimentos' : 'Despesas';
+  if (filtroCat) tipoLabel += ' · ' + getNomeCat(filtroCat) + (filtroSubcat ? ' › ' + filtroSubcat : '');
 
   document.getElementById('detalhe-mes-titulo').textContent = tipoLabel + ' · ' + nomeMs.charAt(0).toUpperCase() + nomeMs.slice(1);
   document.getElementById('detalhe-mes-total').textContent = fmt(total);
@@ -595,6 +668,8 @@ function abrirDetalheMes(mes, tipo) {
 }
 
 function renderChartPatrimonio() {
+  // Se o CDN do Chart.js falhar (offline/rede lenta), o dashboard segue funcionando sem o gráfico
+  if (typeof Chart === 'undefined') return;
   const pats = [...DB.patrimonio].sort((a, b) => a.mes.localeCompare(b.mes)).slice(-6);
   if (chartPatrimonio) chartPatrimonio.destroy();
   const ctx = document.getElementById('chartPatrimonio');
@@ -700,7 +775,6 @@ function renderLancamentos() {
     tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:24px">Nenhum lançamento encontrado</td></tr>';
     return;
   }
-  const nomesFormaPgto = { credito: 'Crédito', debito: 'Débito', pix: 'Pix', dinheiro: 'Dinheiro', transferencia: 'Transf.', boleto: 'Boleto' };
   lista.forEach(l => {
     const isInterno = l.tipo === 'interno';
     const badge = l.status === 'pendente'
@@ -711,7 +785,7 @@ function renderLancamentos() {
     const badgeSituacao = emAberto
       ? '<span class="tx-badge" style="background:#fef9c3;color:#a16207">○ Em aberto</span>'
       : '<span class="tx-badge" style="background:#dcfce7;color:#166534">✓ Pago</span>';
-    const fpgto = l.formaPagamento ? '<span style="font-size:10px;color:var(--text3)"> · ' + (nomesFormaPgto[l.formaPagamento] || l.formaPagamento) + '</span>' : '';
+    const fpgto = l.formaPagamento ? '<span style="font-size:10px;color:var(--text3)"> · ' + getNomeFormaPgto(l.formaPagamento) + '</span>' : '';
     const isInvest = l.tipo === 'investimento';
     const amtClass = isInterno ? 'neu' : l.tipo === 'receita' ? 'pos' : isInvest ? 'inv' : 'neg';
     const amtPrefix = isInterno ? '' : l.tipo === 'receita' ? '+' : isInvest ? '~' : '-';
@@ -786,7 +860,7 @@ function abrirAlterarLote() {
   const sel = document.getElementById('lote-categoria');
   sel.innerHTML = '<option value="">— não alterar —</option>' + DB.categorias.map(c => '<option value="' + c.id + '">' + c.nome + '</option>').join('');
   document.getElementById('lote-subcategoria').innerHTML = '<option value="">— não alterar —</option>';
-  document.getElementById('lote-forma-pagamento').value = '';
+  preencherSelectFormaPgto('lote-forma-pagamento', '', '— não alterar —');
   document.getElementById('modal-lote').style.display = 'flex';
 }
 
@@ -819,48 +893,6 @@ function salvarAlterarLote() {
 }
 
 
-// ========================
-// BUSCA GLOBAL
-// ========================
-function buscarGlobal(query) {
-  if (!query || query.length < 2) { renderLancamentos(); return; }
-  const q = query.toLowerCase();
-  const lista = DB.lancamentos.filter(l =>
-    l.descricao.toLowerCase().includes(q) ||
-    getNomeCat(l.categoria).toLowerCase().includes(q) ||
-    (l.subcategoria||'').toLowerCase().includes(q) ||
-    (l.tags||[]).some(t => t.toLowerCase().includes(q))
-  ).sort((a,b) => b.data.localeCompare(a.data));
-
-  const tbody = document.getElementById('tbody-lancamentos');
-  tbody.innerHTML = '';
-  if (!lista.length) {
-    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:24px">Nenhum resultado para "' + query + '"</td></tr>';
-    return;
-  }
-  lista.forEach(l => {
-    const isInterno = l.tipo === 'interno';
-    const badge = l.status === 'pendente' ? '<span class="tx-badge badge-pendente">revisar</span>' : isInterno ? '<span class="tx-badge badge-interno">interno</span>' : '<span class="tx-badge badge-validado">validado</span>';
-    const isInvest = l.tipo === 'investimento';
-    const amtClass = isInterno ? 'neu' : l.tipo === 'receita' ? 'pos' : isInvest ? 'inv' : 'neg';
-    const amtPrefix = isInterno ? '' : l.tipo === 'receita' ? '+' : isInvest ? '~' : '-';
-    const subcatStr = l.subcategoria ? ' › ' + l.subcategoria : '';
-    const tagsStr = (l.tags||[]).map(t=>'<span class="tag-pill">'+t+'</span>').join('');
-    tbody.innerHTML += '<tr>' +
-      '<td>' + formatarData(l.data) + '</td>' +
-      '<td>' + l.descricao + (tagsStr ? '<br><span style="margin-top:2px;display:flex;gap:4px">' + tagsStr + '</span>' : '') + '</td>' +
-      '<td>' + (isInterno ? '<span class="tag-interno">Interno</span>' : getNomeCat(l.categoria) + subcatStr) + '</td>' +
-      '<td><span style="text-transform:capitalize">' + l.tipo + '</span></td>' +
-      '<td class="tx-amount ' + amtClass + '">' + amtPrefix + ' ' + fmt(l.valor) + '</td>' +
-      '<td>' + badge + '</td>' +
-      '<td style="white-space:nowrap">' +
-        (l.status === 'pendente' ? '<button class="btn" style="font-size:11px;padding:4px 8px" onclick="abrirValidar(\'' + l.id + '\')">Validar</button> ' : '') +
-        '<button class="btn" style="font-size:11px;padding:4px 8px" onclick="abrirEditar(\'' + l.id + '\')"><i class="ti ti-pencil"></i></button> ' +
-        '<button class="btn" style="font-size:11px;padding:4px 8px;color:var(--red);border-color:var(--red)" onclick="excluirLancamento(\'' + l.id + '\')"><i class="ti ti-trash"></i></button>' +
-      '</td></tr>';
-  });
-}
-
 function filtrarPendentes() {
   document.getElementById('filtro-status').value = 'pendente';
   renderLancamentos();
@@ -884,7 +916,7 @@ function abrirEditar(id) {
   preencherSelectCategoria('editar-categoria', l.categoria);
   atualizarSubcatEditar(l.categoria, l.subcategoria);
   renderSeletorTags('editar-tags-seletor', l.tags || []);
-  document.getElementById('editar-forma-pagamento').value = l.formaPagamento || '';
+  preencherSelectFormaPgto('editar-forma-pagamento', l.formaPagamento || '', '—');
   document.getElementById('editar-situacao').value = l.situacao || 'pago';
   // Escopo de grupo (repetição/parcelamento)
   const escopoDiv = document.getElementById('editar-escopo-grupo');
@@ -1023,11 +1055,15 @@ function ignorarLancamento() {
 // ========================
 // IMPORTAR
 // ========================
-function switchTabPlano(tab, el) {
-  document.querySelectorAll('#page-planocontas .tab').forEach(t => t.classList.remove('active'));
-  document.querySelectorAll('#page-planocontas .tab-content').forEach(t => t.classList.remove('active'));
+function switchTabConfig(tab, el) {
+  // Só as abas de 1º nível do hub (preserva as abas internas de natureza do plano de contas)
+  document.querySelectorAll('#page-configuracoes .import-tabs .tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('#page-configuracoes > .card > .tab-content').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
-  document.getElementById('plano-tab-' + tab).classList.add('active');
+  const alvo = document.getElementById('config-tab-' + tab);
+  if (alvo) alvo.classList.add('active');
+  if (tab === 'planocontas') renderPlanoContas();
+  if (tab === 'formas') renderFormasPagamento();
   if (tab === 'regras') renderRegras();
   if (tab === 'tags') renderTags();
 }
@@ -2093,10 +2129,21 @@ function salvarNovaOuEditadaCategoria() {
 }
 
 function excluirCategoria(id) {
-  if (!confirm('Excluir categoria? Os lançamentos ficarão como "outros".')) return;
+  const usados = DB.lancamentos.filter(l => l.categoria === id).length;
+  const msg = usados > 0
+    ? 'Excluir categoria? ' + usados + ' lançamento(s) serão movidos para "Outros".'
+    : 'Excluir categoria?';
+  if (!confirm(msg)) return;
+  // Reatribui lançamentos órfãos (cumpre o que o aviso promete)
+  DB.lancamentos.forEach(l => {
+    if (l.categoria === id) { l.categoria = 'outros'; l.subcategoria = ''; }
+  });
+  // Limpa orçamento e regras órfãos da categoria
+  delete DB.orcamentos[id];
+  DB.regras = (DB.regras || []).filter(r => r.categoria !== id);
   DB.categorias = DB.categorias.filter(c => c.id !== id);
   salvarDB(); preencherSelects(); renderPlanoContas();
-  toast('Categoria excluída');
+  toast(usados > 0 ? 'Categoria excluída — ' + usados + ' lançamento(s) movidos para Outros' : 'Categoria excluída');
 }
 
 // ========================
@@ -2111,7 +2158,7 @@ function renderPatrimonio() {
 
   if (chartPatrimonioFull) chartPatrimonioFull.destroy();
   const ctx = document.getElementById('chartPatrimonioFull');
-  if (!ctx || !pats.length) return;
+  if (!ctx || !pats.length || typeof Chart === 'undefined') return;
   chartPatrimonioFull = new Chart(ctx, {
     type:'line',
     data:{ labels:pats.map(p=>{const[y,m]=p.mes.split('-');return new Date(y,m-1).toLocaleDateString('pt-BR',{month:'short',year:'2-digit'});}), datasets:[{data:pats.map(p=>p.valor),borderColor:'#4f9cf9',backgroundColor:'rgba(79,156,249,0.08)',borderWidth:2,pointBackgroundColor:'#4f9cf9',pointRadius:4,fill:true,tension:0.4}] },
@@ -2196,7 +2243,7 @@ function darBaixaLancamento(id) {
   // Data sugerida: hoje (data real do pagamento)
   document.getElementById('baixa-data').value = new Date().toISOString().slice(0, 10);
   document.getElementById('baixa-valor').value = l.valor;
-  document.getElementById('baixa-forma-pagamento').value = l.formaPagamento || '';
+  preencherSelectFormaPgto('baixa-forma-pagamento', l.formaPagamento || '', '—');
   document.getElementById('modal-baixa').style.display = 'flex';
 }
 
@@ -2402,22 +2449,23 @@ function restaurarBackup(input) {
 }
 
 function atualizarLembreteBackup() {
-  const aviso = document.getElementById('aviso-backup');
-  if (!aviso) return;
+  const avisos = document.querySelectorAll('.aviso-backup');
+  if (!avisos.length) return;
   const ultimo = localStorage.getItem('ultimo-backup');
   const temDados = DB.lancamentos.length > 0;
-  if (!temDados) { aviso.style.display = 'none'; return; }
+  if (!temDados) { avisos.forEach(a => a.style.display = 'none'); return; }
   let diasSem = 999;
   if (ultimo) {
     diasSem = Math.floor((new Date() - new Date(ultimo + 'T12:00:00')) / (1000 * 60 * 60 * 24));
   }
   if (diasSem >= 7) {
-    aviso.style.display = 'flex';
-    document.getElementById('aviso-backup-texto').textContent = ultimo
+    const texto = ultimo
       ? 'Seu último backup foi há ' + diasSem + ' dias. Seus dados vivem só neste navegador — faça um backup.'
       : 'Você ainda não fez nenhum backup. Seus dados vivem só neste navegador — se o cache for limpo, perde tudo.';
+    avisos.forEach(a => a.style.display = 'flex');
+    document.querySelectorAll('.aviso-backup-texto').forEach(t => t.textContent = texto);
   } else {
-    aviso.style.display = 'none';
+    avisos.forEach(a => a.style.display = 'none');
   }
 }
 
@@ -2473,9 +2521,417 @@ function abrirModalLancamento() {
   document.getElementById('manual-data').value = new Date().toISOString().slice(0, 10);
   const tipoAtual = document.getElementById('manual-tipo').value || 'despesa';
   preencherSelectCategoriaPorTipo('manual-categoria', tipoAtual, '');
+  preencherSelectFormaPgto('manual-forma-pagamento', document.getElementById('manual-forma-pagamento').value, '—');
   atualizarSubcatManual();
   renderSeletorTags('manual-tags-seletor', []);
   document.getElementById('modal-lancamento').style.display = 'flex';
   // Foco no valor para lançamento rápido
   setTimeout(() => document.getElementById('manual-valor').focus(), 100);
+}
+
+// ========================
+// FORMAS DE PAGAMENTO (CRUD)
+// ========================
+function renderFormasPagamento() {
+  const lista = document.getElementById('lista-formas-pagamento');
+  if (!lista) return;
+  const formas = DB.formasPagamento || [];
+  if (!formas.length) {
+    lista.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:20px;text-align:center">Nenhuma forma de pagamento cadastrada.</div>';
+    return;
+  }
+  const tipoLabel = { cartao: '💳 Cartão de crédito', conta: '🏦 Conta / Banco', outro: 'Outro' };
+  lista.innerHTML = formas.map(f => {
+    const usados = DB.lancamentos.filter(l => l.formaPagamento === f.id).length;
+    const ciclo = f.tipo === 'cartao'
+      ? (f.fechamento && f.vencimento
+          ? '<span style="font-size:11px;color:var(--text2)">fecha dia ' + f.fechamento + ' · vence dia ' + f.vencimento + '</span>'
+          : '<span style="font-size:11px;color:var(--text3)">sem ciclo de fatura configurado</span>')
+      : '';
+    return '<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:0.5px solid var(--border-light)">' +
+      '<div style="flex:1;min-width:0">' +
+        '<div style="font-size:14px;font-weight:500">' + f.nome + '</div>' +
+        '<div style="font-size:11px;color:var(--text3);display:flex;gap:10px;margin-top:2px;flex-wrap:wrap">' +
+          '<span>' + (tipoLabel[f.tipo] || f.tipo) + '</span>' + ciclo +
+          '<span>' + usados + ' lançamento(s)</span>' +
+        '</div>' +
+      '</div>' +
+      '<button class="btn" style="font-size:11px;padding:4px 10px" onclick="abrirModalFormaPgto(\'' + f.id + '\')"><i class="ti ti-pencil"></i> Editar</button>' +
+      '<button class="btn" style="font-size:11px;padding:4px 10px;color:var(--red);border-color:var(--red)" onclick="excluirFormaPgto(\'' + f.id + '\')"><i class="ti ti-trash"></i></button>' +
+    '</div>';
+  }).join('');
+}
+
+function toggleCamposCartao() {
+  const tipo = document.getElementById('fp-tipo').value;
+  const mostra = tipo === 'cartao';
+  document.getElementById('fp-campos-cartao').style.display = mostra ? 'flex' : 'none';
+  document.getElementById('fp-dica-cartao').style.display = mostra ? 'block' : 'none';
+}
+
+function abrirModalFormaPgto(id) {
+  const f = id ? getFormaPgto(id) : null;
+  document.getElementById('fp-modal-titulo').textContent = f ? 'Editar forma de pagamento' : 'Nova forma de pagamento';
+  document.getElementById('fp-id').value = f ? f.id : '';
+  document.getElementById('fp-nome').value = f ? f.nome : '';
+  document.getElementById('fp-tipo').value = f ? f.tipo : 'cartao';
+  document.getElementById('fp-fechamento').value = f && f.fechamento ? f.fechamento : '';
+  document.getElementById('fp-vencimento').value = f && f.vencimento ? f.vencimento : '';
+  toggleCamposCartao();
+  document.getElementById('modal-forma-pgto').style.display = 'flex';
+}
+
+function salvarFormaPgto() {
+  const id = document.getElementById('fp-id').value;
+  const nome = document.getElementById('fp-nome').value.trim();
+  const tipo = document.getElementById('fp-tipo').value;
+  let fechamento = parseInt(document.getElementById('fp-fechamento').value) || null;
+  let vencimento = parseInt(document.getElementById('fp-vencimento').value) || null;
+  if (!nome) { toast('Informe o nome da forma de pagamento'); return; }
+  if (tipo !== 'cartao') { fechamento = null; vencimento = null; }
+  if (tipo === 'cartao' && ((fechamento && !vencimento) || (!fechamento && vencimento))) {
+    toast('Preencha fechamento E vencimento, ou deixe os dois em branco'); return;
+  }
+  if (fechamento && (fechamento < 1 || fechamento > 28)) { toast('Fechamento deve ser entre 1 e 28'); return; }
+  if (vencimento && (vencimento < 1 || vencimento > 28)) { toast('Vencimento deve ser entre 1 e 28'); return; }
+  const duplicado = (DB.formasPagamento || []).some(f => f.nome.toLowerCase() === nome.toLowerCase() && f.id !== id);
+  if (duplicado) { toast('Já existe uma forma de pagamento com esse nome'); return; }
+
+  if (id) {
+    const f = getFormaPgto(id);
+    if (!f) return;
+    f.nome = nome; f.tipo = tipo; f.fechamento = fechamento; f.vencimento = vencimento;
+    toast('✓ Forma de pagamento atualizada');
+  } else {
+    DB.formasPagamento.push({ id: 'fp_' + gerarId(), nome, tipo, fechamento, vencimento });
+    toast('✓ Forma de pagamento criada');
+  }
+  salvarDB();
+  fecharModal('modal-forma-pgto');
+  renderFormasPagamento();
+  try { renderDashboard(); } catch(e) {}
+}
+
+function excluirFormaPgto(id) {
+  const f = getFormaPgto(id);
+  if (!f) return;
+  const usados = DB.lancamentos.filter(l => l.formaPagamento === id).length;
+  if (usados > 0) {
+    toast('⚠️ ' + usados + ' lançamento(s) usam "' + f.nome + '". Altere-os antes de excluir (use Alterar em lote).');
+    return;
+  }
+  if (!confirm('Excluir a forma de pagamento "' + f.nome + '"?')) return;
+  DB.formasPagamento = DB.formasPagamento.filter(x => x.id !== id);
+  salvarDB();
+  renderFormasPagamento();
+  try { renderDashboard(); } catch(e) {}
+  toast('Forma de pagamento excluída');
+}
+
+// ========================
+// FATURA DO CARTÃO (dashboard)
+// ========================
+// Ciclo: compras de um fechamento (inclusive) até o próximo (exclusive).
+// A fatura que fecha no dia F vence no dia V do mesmo mês se V >= F, senão no mês seguinte.
+function dataStr(ano, mes, dia) {
+  // mes 0-indexado; normaliza transbordo de mês
+  const d = new Date(ano, mes, dia);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+function calcularCicloFatura(cartao, hojeStr) {
+  const F = cartao.fechamento, V = cartao.vencimento;
+  const hoje = new Date(hojeStr + 'T12:00:00');
+  let ano = hoje.getFullYear(), mes = hoje.getMonth();
+  // Último fechamento ocorrido (<= hoje)
+  if (hoje.getDate() < F) mes -= 1;
+  const fechAtual = dataStr(ano, mes, F);        // início do ciclo aberto
+  const fechProximo = dataStr(ano, mes + 1, F);  // quando o ciclo aberto fecha
+  const fechAnterior = dataStr(ano, mes - 1, F); // início da última fatura fechada
+  // Vencimentos
+  const mesVencFechada = V >= F ? mes : mes + 1;       // fatura que fechou em fechAtual
+  const mesVencAberta  = V >= F ? mes + 1 : mes + 2;   // fatura que fechará em fechProximo
+  return {
+    aberta:  { inicio: fechAtual, fim: fechProximo, fecha: fechProximo, vence: dataStr(ano, mesVencAberta, V) },
+    fechada: { inicio: fechAnterior, fim: fechAtual, fechou: fechAtual, vence: dataStr(ano, mesVencFechada, V) }
+  };
+}
+
+function totalFaturaPeriodo(cartaoId, inicioStr, fimStr) {
+  // Compra no cartão compõe a fatura independente da situação pago/aberto
+  return DB.lancamentos
+    .filter(l => l.tipo === 'despesa' && l.formaPagamento === cartaoId && l.data >= inicioStr && l.data < fimStr)
+    .reduce((a, b) => a + b.valor, 0);
+}
+
+function renderFaturaCartao() {
+  const el = document.getElementById('widget-fatura');
+  if (!el) return;
+  const cartoes = (DB.formasPagamento || []).filter(f => f.tipo === 'cartao' && f.fechamento && f.vencimento);
+  if (!cartoes.length) {
+    el.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:16px 0;text-align:center">Nenhum cartão com fechamento/vencimento configurado.<br>Configure em Configurações → Formas de Pagamento.</div>';
+    return;
+  }
+  const hojeStr = new Date().toISOString().slice(0, 10);
+  el.innerHTML = cartoes.map(cartao => {
+    const ciclo = calcularCicloFatura(cartao, hojeStr);
+    const totalAberta = totalFaturaPeriodo(cartao.id, ciclo.aberta.inicio, ciclo.aberta.fim);
+    const totalFechada = totalFaturaPeriodo(cartao.id, ciclo.fechada.inicio, ciclo.fechada.fim);
+    const diasParaFechar = Math.ceil((new Date(ciclo.aberta.fecha + 'T12:00:00') - new Date(hojeStr + 'T12:00:00')) / 86400000);
+    const diasParaVencer = Math.ceil((new Date(ciclo.fechada.vence + 'T12:00:00') - new Date(hojeStr + 'T12:00:00')) / 86400000);
+
+    let blocoFechada = '';
+    if (totalFechada > 0 && diasParaVencer >= -5) {
+      const corVenc = diasParaVencer < 0 ? 'var(--red)' : diasParaVencer <= 3 ? '#d97706' : 'var(--text2)';
+      const txtVenc = diasParaVencer < 0
+        ? 'venceu ' + formatarData(ciclo.fechada.vence)
+        : diasParaVencer === 0 ? 'vence HOJE' : 'vence ' + formatarData(ciclo.fechada.vence) + ' (em ' + diasParaVencer + ' dia' + (diasParaVencer > 1 ? 's' : '') + ')';
+      blocoFechada =
+        '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--bg);border-radius:8px;margin-top:8px;cursor:pointer" title="Clique para ver as compras desta fatura" onclick="abrirDetalheFatura(\'' + cartao.id + '\',\'fechada\')">' +
+          '<div>' +
+            '<div style="font-size:12px;color:var(--text2)">Fatura fechada · a pagar</div>' +
+            '<div style="font-size:11px;color:' + corVenc + ';font-weight:500">' + txtVenc + '</div>' +
+          '</div>' +
+          '<div style="font-size:17px;font-weight:600">' + fmt(totalFechada) + '</div>' +
+        '</div>';
+    }
+
+    return '<div style="padding:4px 0 12px 0;border-bottom:0.5px solid var(--border-light)">' +
+      '<div style="font-size:13px;font-weight:600;margin-bottom:8px">' + cartao.nome + '</div>' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:var(--bg);border-radius:8px;cursor:pointer" title="Clique para ver as compras do ciclo atual" onclick="abrirDetalheFatura(\'' + cartao.id + '\',\'aberta\')">' +
+        '<div>' +
+          '<div style="font-size:12px;color:var(--text2)">Fatura aberta · ciclo atual</div>' +
+          '<div style="font-size:11px;color:var(--text3)">' + formatarData(ciclo.aberta.inicio) + ' até ' + formatarData(ciclo.aberta.fim) + ' · fecha em ' + diasParaFechar + ' dia' + (diasParaFechar > 1 ? 's' : '') + '</div>' +
+        '</div>' +
+        '<div style="font-size:20px;font-weight:600;color:var(--accent)">' + fmt(totalAberta) + '</div>' +
+      '</div>' +
+      blocoFechada +
+    '</div>';
+  }).join('');
+}
+
+// ========================
+// GASTOS POR FORMA DE PAGAMENTO (dashboard)
+// ========================
+function renderGastosPorForma() {
+  const el = document.getElementById('lista-formas-gastos');
+  if (!el) return;
+  const lancsMes = getMes(mesAtual).filter(l => l.tipo === 'despesa');
+  const porForma = {};
+  lancsMes.forEach(l => {
+    const chave = l.formaPagamento || '_sem';
+    porForma[chave] = (porForma[chave] || 0) + l.valor;
+  });
+  const entradas = Object.entries(porForma).sort((a, b) => b[1] - a[1]);
+  if (!entradas.length) {
+    el.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:16px 0;text-align:center">Nenhuma despesa no mês selecionado</div>';
+    return;
+  }
+  const maxVal = Math.max(...entradas.map(e => e[1]), 1);
+  const cores = ['#4f9cf9', '#8b5cf6', '#14b8a6', '#f59e0b', '#ec4899', '#f97316', '#10b981', '#6366f1'];
+  el.innerHTML = entradas.map(([fpId, val], i) => {
+    const nome = fpId === '_sem' ? 'Sem forma informada' : getNomeFormaPgto(fpId);
+    const pct = Math.round((val / maxVal) * 100);
+    const cor = fpId === '_sem' ? '#94a3b8' : cores[i % cores.length];
+    return '<div class="cat-item" style="cursor:pointer" title="Clique para ver os lançamentos" onclick="abrirDetalheForma(\'' + fpId + '\')">' +
+      '<span class="cat-label">' + nome + '</span>' +
+      '<div class="cat-bar-bg"><div class="cat-bar" style="width:' + pct + '%;background:' + cor + '"></div></div>' +
+      '<span class="cat-value">' + fmt(val) + '</span>' +
+    '</div>';
+  }).join('');
+}
+
+// ========================
+// PREVISTO x REALIZADO (dashboard)
+// ========================
+function renderPrevistoRealizado() {
+  const el = document.getElementById('previsto-realizado');
+  if (!el) return;
+  const lancsMes = getMes(mesAtual);
+  const isPago = l => (l.situacao || 'pago') === 'pago';
+  const somar = arr => arr.reduce((a, b) => a + b.valor, 0);
+
+  const linhas = [
+    { label: 'Receitas', tipo: 'receita', cor: '#16a34a' },
+    { label: 'Despesas', tipo: 'despesa', cor: '#d97706' },
+    { label: 'Investimentos', tipo: 'investimento', cor: '#2563eb' },
+  ].map(cfg => {
+    const doTipo = lancsMes.filter(l => l.tipo === cfg.tipo);
+    const realizado = somar(doTipo.filter(isPago));
+    const previsto = somar(doTipo); // pagos + em aberto
+    return { ...cfg, realizado, previsto };
+  });
+
+  const linhaHTML = ln => {
+    const pct = ln.previsto > 0 ? Math.min(Math.round((ln.realizado / ln.previsto) * 100), 100) : 0;
+    const falta = ln.previsto - ln.realizado;
+    return '<div style="margin-bottom:14px;cursor:pointer" title="Clique para ver os lançamentos" onclick="abrirDetalhePR(\'' + ln.tipo + '\')">' +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px">' +
+        '<span style="font-size:13px;font-weight:500">' + ln.label + '</span>' +
+        '<span style="font-size:12px;color:var(--text2)">' +
+          '<strong style="color:var(--text)">' + fmt(ln.realizado) + '</strong> de ' + fmt(ln.previsto) + ' previsto' +
+          (falta > 0.005 ? ' · falta ' + fmt(falta) : ' · ✓ concluído') +
+        '</span>' +
+      '</div>' +
+      '<div class="cat-bar-bg" style="height:8px"><div class="cat-bar" style="width:' + pct + '%;background:' + ln.cor + ';height:8px"></div></div>' +
+    '</div>';
+  };
+
+  // Saldo previsto do mês (receitas - despesas, tudo incluído)
+  const rec = linhas[0], desp = linhas[1];
+  const saldoPrevisto = rec.previsto - desp.previsto;
+  const saldoRealizado = rec.realizado - desp.realizado;
+  const corSaldo = v => v < 0 ? 'var(--red)' : '#16a34a';
+
+  el.innerHTML = linhas.map(linhaHTML).join('') +
+    '<div style="display:flex;gap:24px;padding-top:10px;border-top:0.5px solid var(--border-light);font-size:12px;color:var(--text2)">' +
+      '<span>Saldo realizado: <strong style="color:' + corSaldo(saldoRealizado) + '">' + (saldoRealizado < 0 ? '- ' : '') + fmt(saldoRealizado) + '</strong></span>' +
+      '<span>Saldo previsto no fim do mês: <strong style="color:' + corSaldo(saldoPrevisto) + '">' + (saldoPrevisto < 0 ? '- ' : '') + fmt(saldoPrevisto) + '</strong></span>' +
+    '</div>';
+}
+
+// ========================
+// FILTROS DO GRÁFICO DE EVOLUÇÃO MENSAL
+// ========================
+function atualizarFiltroCatGrafico() {
+  const sel = document.getElementById('grafico-categoria');
+  if (!sel) return;
+  const tipo = document.getElementById('grafico-tipo')?.value || 'despesa';
+  const valorAtual = sel.value;
+  const ids = getCategoriasPorTipo(tipo);
+  const cats = DB.categorias.filter(c => ids.includes(c.id));
+  sel.innerHTML = '<option value="">Todas categorias</option>' +
+    cats.map(c => '<option value="' + c.id + '"' + (c.id === valorAtual ? ' selected' : '') + '>' + c.nome + '</option>').join('');
+  atualizarFiltroSubcatGrafico();
+}
+
+function atualizarFiltroSubcatGrafico() {
+  const sel = document.getElementById('grafico-subcategoria');
+  if (!sel) return;
+  const catId = document.getElementById('grafico-categoria')?.value || '';
+  const valorAtual = sel.value;
+  if (!catId) { sel.innerHTML = '<option value="">Todas subcat.</option>'; return; }
+  const subcats = getSubcats(catId);
+  sel.innerHTML = '<option value="">Todas subcat.</option>' +
+    subcats.map(s => '<option value="' + s + '"' + (s === valorAtual ? ' selected' : '') + '>' + s + '</option>').join('');
+}
+
+// ========================
+// DRILL-DOWN GENÉRICO DO DASHBOARD
+// Todo número agregado é uma porta de entrada: clique → lançamentos que o compõem.
+// Reaproveita o modal-detalhe-mes.
+// ========================
+function nomeMesLabel(mes) {
+  const [y, m] = mes.split('-');
+  const label = new Date(parseInt(y), parseInt(m) - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function abrirDetalheGenerico(titulo, itens, opts) {
+  opts = opts || {};
+  const total = itens.reduce((a, b) => a + b.valor, 0);
+  document.getElementById('detalhe-mes-titulo').textContent = titulo;
+  document.getElementById('detalhe-mes-total').textContent = fmt(total);
+  const corpo = document.getElementById('detalhe-mes-corpo');
+
+  if (!itens.length) {
+    corpo.innerHTML = '<div style="text-align:center;color:var(--text3);padding:20px">Nenhum lançamento aqui ainda</div>';
+    document.getElementById('modal-detalhe-mes').style.display = 'flex';
+    return;
+  }
+
+  let html = '';
+  // Quebra por grupo (subcategoria, categoria ou situação, conforme o contexto)
+  if (opts.grupo) {
+    const porGrupo = {};
+    itens.forEach(l => {
+      const g = opts.grupo(l);
+      if (!porGrupo[g.id]) porGrupo[g.id] = { nome: g.nome, cor: g.cor, val: 0 };
+      porGrupo[g.id].val += l.valor;
+    });
+    html += '<div style="margin-bottom:14px">' +
+      Object.values(porGrupo).sort((a, b) => b.val - a.val).map(g => {
+        const pct = total > 0 ? ((g.val / total) * 100).toFixed(1) : 0;
+        return '<div style="display:flex;align-items:center;gap:10px;padding:6px 0">' +
+          '<div style="width:10px;height:10px;border-radius:50%;background:' + g.cor + ';flex-shrink:0"></div>' +
+          '<span style="flex:1;font-size:13px">' + g.nome + '</span>' +
+          '<span style="font-size:12px;color:var(--text3)">' + pct + '%</span>' +
+          '<span style="font-size:13px;font-weight:500;min-width:90px;text-align:right">' + fmt(g.val) + '</span>' +
+        '</div>';
+      }).join('') +
+    '</div>';
+  }
+
+  html += '<div style="border-top:0.5px solid var(--border-light);padding-top:10px;font-size:12px;color:var(--text2);font-weight:500;margin-bottom:8px">Todos os lançamentos (' + itens.length + ')</div>' +
+    itens.map(l => {
+      const badgeSit = opts.mostrarSituacao
+        ? ((l.situacao || 'pago') === 'aberto'
+            ? '<span style="font-size:10px;background:#fef9c3;color:#a16207;border-radius:6px;padding:1px 6px;white-space:nowrap">○ aberto</span>'
+            : '<span style="font-size:10px;background:#dcfce7;color:#166534;border-radius:6px;padding:1px 6px;white-space:nowrap">✓ pago</span>')
+        : '';
+      return '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:0.5px solid var(--border-light2)">' +
+        '<span style="font-size:11px;color:var(--text3);min-width:50px">' + formatarData(l.data) + '</span>' +
+        '<span style="flex:1;font-size:12px">' + l.descricao + '</span>' +
+        badgeSit +
+        '<span style="font-size:12px;font-weight:500">' + fmt(l.valor) + '</span>' +
+      '</div>';
+    }).join('');
+
+  corpo.innerHTML = html;
+  document.getElementById('modal-detalhe-mes').style.display = 'flex';
+}
+
+// 1. Gastos por categoria → lançamentos da categoria no mês, quebrados por subcategoria
+function abrirDetalheCategoria(catId) {
+  const itens = getMes(mesAtual)
+    .filter(l => l.tipo === 'despesa' && l.categoria === catId)
+    .sort((a, b) => b.valor - a.valor);
+  abrirDetalheGenerico(getNomeCat(catId) + ' · ' + nomeMesLabel(mesAtual), itens, {
+    grupo: l => ({ id: l.subcategoria || '_sem', nome: l.subcategoria || 'Sem subcategoria', cor: getCor(catId) })
+  });
+}
+
+// 2. Gastos por forma de pagamento → lançamentos da forma no mês, quebrados por categoria
+function abrirDetalheForma(fpId) {
+  const itens = getMes(mesAtual)
+    .filter(l => l.tipo === 'despesa' && (fpId === '_sem' ? !l.formaPagamento : l.formaPagamento === fpId))
+    .sort((a, b) => b.valor - a.valor);
+  const nome = fpId === '_sem' ? 'Sem forma informada' : getNomeFormaPgto(fpId);
+  abrirDetalheGenerico(nome + ' · ' + nomeMesLabel(mesAtual), itens, {
+    grupo: l => ({ id: l.categoria, nome: getNomeCat(l.categoria), cor: getCor(l.categoria) })
+  });
+}
+
+// 3. Fatura do cartão → compras do ciclo (aberta ou fechada), quebradas por categoria
+function abrirDetalheFatura(cartaoId, qual) {
+  const cartao = getFormaPgto(cartaoId);
+  if (!cartao || !cartao.fechamento || !cartao.vencimento) return;
+  const ciclo = calcularCicloFatura(cartao, new Date().toISOString().slice(0, 10));
+  const per = qual === 'aberta' ? ciclo.aberta : ciclo.fechada;
+  const itens = DB.lancamentos
+    .filter(l => l.tipo === 'despesa' && l.formaPagamento === cartaoId && l.data >= per.inicio && l.data < per.fim)
+    .sort((a, b) => b.valor - a.valor);
+  const rotulo = qual === 'aberta' ? 'fatura aberta' : 'fatura fechada';
+  abrirDetalheGenerico(cartao.nome + ' · ' + rotulo + ' (' + formatarData(per.inicio) + ' – ' + formatarData(per.fim) + ')', itens, {
+    grupo: l => ({ id: l.categoria, nome: getNomeCat(l.categoria), cor: getCor(l.categoria) })
+  });
+}
+
+// 4. Previsto x Realizado → lançamentos do tipo no mês, separando pagos de em aberto
+function abrirDetalhePR(tipo) {
+  const itens = getMes(mesAtual)
+    .filter(l => l.tipo === tipo)
+    .sort((a, b) => {
+      // Em aberto primeiro (é o que falta acontecer), depois por valor
+      const sa = (a.situacao || 'pago') === 'aberto' ? 0 : 1;
+      const sb = (b.situacao || 'pago') === 'aberto' ? 0 : 1;
+      return sa !== sb ? sa - sb : b.valor - a.valor;
+    });
+  const labels = { receita: 'Receitas', despesa: 'Despesas', investimento: 'Investimentos' };
+  abrirDetalheGenerico((labels[tipo] || tipo) + ' · previsto x realizado · ' + nomeMesLabel(mesAtual), itens, {
+    mostrarSituacao: true,
+    grupo: l => (l.situacao || 'pago') === 'aberto'
+      ? { id: 'aberto', nome: '○ Em aberto (previsto, ainda não realizado)', cor: '#eab308' }
+      : { id: 'pago', nome: '✓ Realizado (pago)', cor: '#16a34a' }
+  });
 }
