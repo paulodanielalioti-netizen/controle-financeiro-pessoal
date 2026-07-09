@@ -289,6 +289,21 @@ body {
 .tab-content { display: none; }
 .tab-content.active { display: block; }
 
+/* CONFIGURAÇÕES — hub de abas */
+.cfg-tab {
+  padding: 8px 18px;
+  border: 0.5px solid var(--border-light);
+  background: var(--card); color: var(--text2);
+  font-size: 13px; font-family: 'DM Sans', sans-serif; cursor: pointer;
+}
+.cfg-tab.active { background: var(--dark); border-color: var(--dark); color: #fff; }
+.cfg-tab-content { display: none; }
+.cfg-tab-content.active { display: block; }
+
+/* Cards de forma de pagamento / situação */
+.fp-card { transition: box-shadow 0.15s ease, transform 0.15s ease; }
+.fp-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); transform: translateY(-1px); }
+
 .import-area {
   border: 1.5px dashed var(--border-light);
   border-radius: 12px;
