@@ -303,6 +303,12 @@ body {
 /* Cards de forma de pagamento / situação */
 .fp-card { transition: box-shadow 0.15s ease, transform 0.15s ease; }
 .fp-card:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); transform: translateY(-1px); }
+.fp-card-active { border-color: var(--dark) !important; box-shadow: 0 0 0 1.5px var(--dark) inset; }
+.fp-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 10px;
+}
 
 .import-area {
   border: 1.5px dashed var(--border-light);
