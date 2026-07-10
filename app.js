@@ -58,7 +58,19 @@ let DB = {
 let chartPatrimonio = null;
 let chartPatrimonioFull = null;
 let chartCategorias = null;
-let mesAtual = new Date().toISOString().slice(0, 7);
+// ===== Datas no fuso LOCAL (nunca usar toISOString para "hoje": em UTC-3, depois das 21h o UTC já virou o dia seguinte) =====
+function pad2(n) { return String(n).padStart(2, '0'); }
+function dataLocalISO(d) { d = d || new Date(); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+function mesLocalISO(d) { return dataLocalISO(d).slice(0, 7); }
+
+// Escape de HTML — todo texto vindo do usuário/extrato passa por aqui antes de entrar em innerHTML
+function esc(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+let mesAtual = mesLocalISO();
 
 // ========================
 // INIT
@@ -190,7 +202,7 @@ function carregarDB() {
         // 1. Lançamentos existentes: tudo que já está no sistema é fato consumado = pago
         DB.lancamentos.forEach(l => { if (!l.situacao) l.situacao = 'pago'; });
         // 2. Previstos viram lançamentos em aberto no mês atual (se ainda não baixados)
-        const mesHoje = new Date().toISOString().slice(0, 7);
+        const mesHoje = mesLocalISO();
         (DB.previstos || []).forEach(p => {
           const jaBaixado = DB.lancamentos.some(l => l.previstoId === p.id && l.data.slice(0, 7) === mesHoje);
           if (jaBaixado) return;
@@ -384,7 +396,7 @@ function mudarMesDashboard(mes) {
 function navegarMes(dir) {
   const [y, m] = mesAtual.split('-').map(Number);
   const d = new Date(y, m - 1 + dir, 1);
-  mesAtual = d.toISOString().slice(0, 7);
+  mesAtual = mesLocalISO(d);
   preencherSeletorMesDashboard();
   renderDashboard();
 }
@@ -393,19 +405,24 @@ function renderDashboard() {
   preencherSeletorMesDashboard();
   preencherSeletorTagDashboard();
 
-  const lancsMes = getMes(mesAtual);
+  // Filtro por tag — GLOBAL: quando selecionado, TODOS os widgets do dashboard respondem
+  const dashTag = (document.getElementById('dash-filtro-tag-select')?.value || '').trim().toLowerCase();
+  const filtraTag = (arr) => dashTag ? arr.filter(l => (l.tags || []).some(t => t.toLowerCase() === dashTag)) : arr;
+
+  const lancsMes = filtraTag(getMes(mesAtual));
   const isPago = l => (l.situacao || 'pago') === 'pago';
-  // Entrou/Saiu = regime de caixa (só o que já foi pago)
+  // Receitas/Despesas = regime de caixa (só o que já foi pago)
   const receitas = lancsMes.filter(l => l.tipo === 'receita' && isPago(l)).reduce((a, b) => a + b.valor, 0);
   const despesas = lancsMes.filter(l => l.tipo === 'despesa' && isPago(l)).reduce((a, b) => a + b.valor, 0);
   const investimentos = lancsMes.filter(l => l.tipo === 'investimento' && isPago(l)).reduce((a, b) => a + b.valor, 0);
 
   const d = new Date(mesAtual + '-01');
   d.setMonth(d.getMonth() - 1);
-  const mesAnt = d.toISOString().slice(0, 7);
-  const laMes = getMes(mesAnt);
+  const mesAnt = mesLocalISO(d);
+  const laMes = filtraTag(getMes(mesAnt));
   const recAnt = laMes.filter(l => l.tipo === 'receita' && isPago(l)).reduce((a, b) => a + b.valor, 0);
   const despAnt = laMes.filter(l => l.tipo === 'despesa' && isPago(l)).reduce((a, b) => a + b.valor, 0);
+  const invAnt = laMes.filter(l => l.tipo === 'investimento' && isPago(l)).reduce((a, b) => a + b.valor, 0);
 
   document.getElementById('m-receitas').textContent = fmt(receitas);
   document.getElementById('m-despesas').textContent = fmt(despesas);
@@ -419,6 +436,7 @@ function renderDashboard() {
 
   const setDelta = (elId, atual, anterior) => {
     const el = document.getElementById(elId);
+    if (!el) return;
     if (!anterior || anterior === 0) { el.textContent = ''; return; }
     const pct = ((atual - anterior) / anterior * 100).toFixed(0);
     const up = atual >= anterior;
@@ -427,31 +445,14 @@ function renderDashboard() {
   };
   setDelta('d-receitas', receitas, recAnt);
   setDelta('d-despesas', despesas, despAnt);
+  setDelta('d-investimentos', investimentos, invAnt);
   setDelta('d-patrimonio', pat, patAnt);
 
-  // Filtro por tag via select
-  const dashTag = (document.getElementById('dash-filtro-tag-select')?.value || '').trim().toLowerCase();
-  const lancsFiltrados = dashTag
-    ? lancsMes.filter(l => (l.tags || []).some(t => t.toLowerCase() === dashTag))
-    : lancsMes;
+  // lancsMes já vem filtrado pela tag (filtro global)
+  const lancsFiltrados = lancsMes;
 
   const subEl = document.getElementById('dash-tag-sub');
   if (subEl) subEl.textContent = dashTag ? 'Tag: ' + dashTag : 'vs orçamento';
-
-  // ===== SITUAÇÃO DAS CONTAS DO MÊS (Vencidas / Vencem hoje / A vencer / Pagas / Total) =====
-  const hojeISO = new Date().toISOString().slice(0, 10);
-  const despesasMes = lancsFiltrados.filter(l => l.tipo === 'despesa');
-  const vencidas = despesasMes.filter(l => (l.situacao || 'pago') === 'aberto' && l.data < hojeISO).reduce((a, b) => a + b.valor, 0);
-  const vencemHoje = despesasMes.filter(l => (l.situacao || 'pago') === 'aberto' && l.data === hojeISO).reduce((a, b) => a + b.valor, 0);
-  const aVencer = despesasMes.filter(l => (l.situacao || 'pago') === 'aberto' && l.data > hojeISO).reduce((a, b) => a + b.valor, 0);
-  const pagas = despesasMes.filter(l => (l.situacao || 'pago') === 'pago').reduce((a, b) => a + b.valor, 0);
-  const totalPeriodo = vencidas + vencemHoje + aVencer + pagas;
-  const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = fmt(v); };
-  setTxt('sit-vencidas', vencidas);
-  setTxt('sit-vencem-hoje', vencemHoje);
-  setTxt('sit-a-vencer', aVencer);
-  setTxt('sit-pagas', pagas);
-  setTxt('sit-total', totalPeriodo);
 
   renderFaturaCartao();
   renderGastosPorFormaPagamento(lancsFiltrados);
@@ -470,7 +471,7 @@ function renderDashboard() {
     const corBarra = orc > 0 && val > orc ? '#ef4444' : getCor(cat);
     const orcLabel = orc > 0 && !dashTag ? '<span style="font-size:10px;color:var(--text3);margin-left:4px">/ ' + fmt(orc) + '</span>' : '';
     listaCats.innerHTML += '<div class="cat-item">' +
-      '<span class="cat-label">' + getNomeCat(cat) + '</span>' +
+      '<span class="cat-label">' + esc(getNomeCat(cat)) + '</span>' +
       '<div class="cat-bar-bg"><div class="cat-bar" style="width:' + pct + '%;background:' + corBarra + '"></div></div>' +
       '<span class="cat-value">' + fmt(val) + orcLabel + '</span>' +
       '</div>';
@@ -479,66 +480,9 @@ function renderDashboard() {
     listaCats.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:16px 0;text-align:center">Nenhuma despesa' + (dashTag ? ' com a tag "' + dashTag + '"' : '') + ' em ' + mesAtual + '</div>';
   }
 
-  // Últimos lançamentos
-  const ultimos = [...DB.lancamentos].sort((a, b) => b.data.localeCompare(a.data)).slice(0, 5);
-  const listaUltimos = document.getElementById('lista-ultimos');
-  listaUltimos.innerHTML = '';
-  if (!ultimos.length) {
-    listaUltimos.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:8px 0">Nenhum lançamento ainda</div>';
-  }
-  ultimos.forEach(l => { listaUltimos.innerHTML += buildTxItem(l); });
-
-  // ===== PROJEÇÃO DO MÊS (previsibilidade) =====
-  const cardProj = document.getElementById('card-projecao');
-  const emAbertoMes = lancsMes.filter(l => (l.situacao || 'pago') === 'aberto').sort((a, b) => a.data.localeCompare(b.data));
-  if (cardProj) {
-    if (emAbertoMes.length && !dashTag) {
-      cardProj.style.display = 'block';
-      const lista = document.getElementById('lista-em-aberto');
-      lista.innerHTML = emAbertoMes.map(l => {
-        const amtClass = l.tipo === 'receita' ? 'pos' : l.tipo === 'interno' ? 'neu' : 'neg';
-        const amtPrefix = l.tipo === 'receita' ? '+ ' : l.tipo === 'interno' ? '' : '- ';
-        return '<div class="tx-item">' +
-          '<div class="tx-icon" style="background:#fef9c3"><i class="ti ti-clock" style="color:#a16207"></i></div>' +
-          '<div class="tx-info"><div class="tx-name">' + l.descricao + '</div>' +
-          '<div class="tx-cat">' + getNomeCat(l.categoria) + ' · vence ' + formatarData(l.data) + '</div></div>' +
-          '<div class="tx-right">' +
-            '<div class="tx-amount ' + amtClass + '">' + amtPrefix + fmt(l.valor) + '</div>' +
-          '</div></div>';
-      }).join('');
-    } else {
-      cardProj.style.display = 'none';
-    }
-  }
-
+  try { renderGraficoPrevistoRealizado(); } catch(e) { console.error('previstoRealizado:', e); }
   try { renderChartPatrimonio(); } catch(e) { console.error('chartPatrimonio:', e); }
   try { renderGraficoMensal(); } catch(e) { console.error('grafico:', e); }
-}
-
-function buildTxItem(l) {
-  const isInterno = l.tipo === 'interno';
-  const badge = l.status === 'pendente'
-    ? '<span class="tx-badge badge-pendente">revisar</span>'
-    : l.status === 'validado'
-    ? '<span class="tx-badge badge-validado">validado</span>'
-    : '<span class="tx-badge badge-interno">interno</span>';
-  const badgeConciliado = l.conciliado ? '<span class="tx-badge" style="background:#cffafe;color:#0e7490">🔗 conciliado</span>' : '';
-  const isInvest = l.tipo === 'investimento';
-  const amtClass = isInterno ? 'neu' : l.tipo === 'receita' ? 'pos' : isInvest ? 'inv' : 'neg';
-  const amtPrefix = isInterno ? '' : l.tipo === 'receita' ? '+ ' : isInvest ? '~ ' : '- ';
-  const cor = isInterno ? '#f1f5f9' : l.tipo === 'receita' ? '#dcfce7' : isInvest ? '#dbeafe' : '#fef3c7';
-  const iconCor = isInterno ? '#94a3b8' : l.tipo === 'receita' ? '#16a34a' : isInvest ? '#2563eb' : '#d97706';
-  const icon = isInterno ? 'ti-transfer' : l.tipo === 'receita' ? 'ti-arrow-down' : isInvest ? 'ti-trending-up' : 'ti-arrow-up';
-  const catNome = isInterno
-    ? '<span class="tag-interno"><i class="ti ti-arrows-exchange"></i> Movimentação interna</span>'
-    : getNomeCat(l.categoria) + (l.subcategoria ? ' › ' + l.subcategoria : '');
-  const tags = (l.tags || []).map(t => '<span class="tag-pill">' + t + '</span>').join('');
-  return '<div class="tx-item">' +
-    '<div class="tx-icon" style="background:' + cor + '"><i class="ti ' + icon + '" style="color:' + iconCor + '"></i></div>' +
-    '<div class="tx-info"><div class="tx-name">' + l.descricao + badge + badgeConciliado + '</div>' +
-    '<div class="tx-cat">' + catNome + (tags ? ' ' + tags : '') + '</div></div>' +
-    '<div class="tx-right"><div class="tx-amount ' + amtClass + '">' + amtPrefix + fmt(l.valor) + '</div>' +
-    '<div class="tx-date">' + formatarData(l.data) + '</div></div></div>';
 }
 
 // ========================
@@ -580,14 +524,14 @@ function renderGraficoMensal() {
   const base = new Date(mesAtual + '-01');
   for (let i = nMeses - 1; i >= 0; i--) {
     const d = new Date(base.getFullYear(), base.getMonth() - i, 1);
-    meses.push(d.toISOString().slice(0, 7));
+    meses.push(mesLocalISO(d));
   }
 
   const dados = meses.map(m => {
-    const total = DB.lancamentos
+    const total = filtraPorDashTag(DB.lancamentos
       .filter(l => l.tipo === tipo && isPago(l) && l.data.slice(0, 7) === m
         && (!catFiltro || l.categoria === catFiltro)
-        && (!subFiltro || l.subcategoria === subFiltro))
+        && (!subFiltro || l.subcategoria === subFiltro)))
       .reduce((a, b) => a + b.valor, 0);
     return { mes: m, total };
   });
@@ -615,14 +559,93 @@ function renderGraficoMensal() {
   el.innerHTML = svg;
 }
 
+// Previsto × Realizado — barras agrupadas por mês (sobra prevista vs. sobra já realizada)
+function renderGraficoPrevistoRealizado() {
+  const el = document.getElementById('grafico-previsto-realizado');
+  if (!el) return;
+  const nMeses = 6;
+  const meses = [];
+  const base = new Date(mesAtual + '-01');
+  for (let i = nMeses - 1; i >= 0; i--) {
+    const d = new Date(base.getFullYear(), base.getMonth() - i, 1);
+    meses.push(mesLocalISO(d));
+  }
+
+  const dados = meses.map(m => {
+    const doMes = filtraPorDashTag(DB.lancamentos.filter(l => l.data.slice(0, 7) === m));
+    const recTotal = doMes.filter(l => l.tipo === 'receita').reduce((a, b) => a + b.valor, 0);
+    const despTotal = doMes.filter(l => l.tipo === 'despesa').reduce((a, b) => a + b.valor, 0);
+    const recPago = doMes.filter(l => l.tipo === 'receita' && (l.situacao||'pago')==='pago').reduce((a, b) => a + b.valor, 0);
+    const despPago = doMes.filter(l => l.tipo === 'despesa' && (l.situacao||'pago')==='pago').reduce((a, b) => a + b.valor, 0);
+    return { mes: m, previsto: recTotal - despTotal, realizado: recPago - despPago };
+  });
+
+  const maxVal = Math.max(...dados.map(d => Math.max(Math.abs(d.previsto), Math.abs(d.realizado))), 1);
+  const minVal = Math.min(...dados.map(d => Math.min(d.previsto, d.realizado)), 0);
+  const alturaMax = 180;
+  const zeroY = 20 + (maxVal / (maxVal - minVal)) * alturaMax;
+  const escala = (v) => (v / (maxVal - minVal)) * alturaMax;
+  const largGrupo = 90;
+
+  let svg = '<svg viewBox="0 0 ' + (dados.length * largGrupo) + ' 280" style="width:100%;min-width:' + (dados.length * 70) + 'px;height:280px;font-family:inherit">';
+  // linha zero
+  svg += '<line x1="0" y1="' + zeroY + '" x2="' + (dados.length * largGrupo) + '" y2="' + zeroY + '" stroke="var(--border-light)" stroke-width="1"></line>';
+  dados.forEach((d, i) => {
+    const xg = i * largGrupo + 10;
+    const [ano, mesN] = d.mes.split('-');
+    const nomeMs = new Date(ano, mesN - 1).toLocaleDateString('pt-BR', { month: 'short' });
+    svg += '<g style="cursor:pointer" onclick="abrirDetalhePrevistoRealizado(\'' + d.mes + '\')">';
+    svg += '<rect x="' + xg + '" y="10" width="70" height="250" fill="transparent"></rect>';
+    // Previsto (barra clara)
+    const hP = escala(Math.abs(d.previsto));
+    const yP = d.previsto >= 0 ? zeroY - hP : zeroY;
+    svg += '<rect x="' + xg + '" y="' + yP + '" width="28" height="' + hP + '" rx="3" fill="#93c5fd"><title>Previsto: ' + fmt(d.previsto) + '</title></rect>';
+    // Realizado (barra escura)
+    const hR = escala(Math.abs(d.realizado));
+    const yR = d.realizado >= 0 ? zeroY - hR : zeroY;
+    svg += '<rect x="' + (xg + 34) + '" y="' + yR + '" width="28" height="' + hR + '" rx="3" fill="#1d4ed8"><title>Realizado: ' + fmt(d.realizado) + '</title></rect>';
+    svg += '<text x="' + (xg + 31) + '" y="270" text-anchor="middle" font-size="11" fill="var(--text3)">' + nomeMs + '/' + ano.slice(2) + '</text>';
+    svg += '</g>';
+  });
+  svg += '</svg>';
+  svg += '<div style="display:flex;gap:16px;justify-content:center;margin-top:6px;font-size:11px;color:var(--text2)">' +
+    '<span><span style="display:inline-block;width:9px;height:9px;background:#93c5fd;border-radius:2px;margin-right:4px"></span>Previsto</span>' +
+    '<span><span style="display:inline-block;width:9px;height:9px;background:#1d4ed8;border-radius:2px;margin-right:4px"></span>Realizado</span>' +
+  '</div>';
+  el.innerHTML = svg;
+}
+
+function abrirDetalhePrevistoRealizado(mes) {
+  const doMes = filtraPorDashTag(DB.lancamentos.filter(l => l.data.slice(0, 7) === mes));
+  const recTotal = doMes.filter(l => l.tipo === 'receita').reduce((a, b) => a + b.valor, 0);
+  const despTotal = doMes.filter(l => l.tipo === 'despesa').reduce((a, b) => a + b.valor, 0);
+  const recPago = doMes.filter(l => l.tipo === 'receita' && (l.situacao||'pago')==='pago').reduce((a, b) => a + b.valor, 0);
+  const despPago = doMes.filter(l => l.tipo === 'despesa' && (l.situacao||'pago')==='pago').reduce((a, b) => a + b.valor, 0);
+  const previsto = recTotal - despTotal, realizado = recPago - despPago;
+  const [ano, mesN] = mes.split('-');
+  const nomeMs = new Date(ano, mesN - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+
+  document.getElementById('detalhe-mes-titulo').textContent = 'Previsto × Realizado · ' + nomeMs.charAt(0).toUpperCase() + nomeMs.slice(1);
+  document.getElementById('detalhe-mes-total').textContent = fmt(realizado);
+  const corpo = document.getElementById('detalhe-mes-corpo');
+  corpo.innerHTML =
+    '<div style="display:flex;flex-direction:column;gap:10px;padding:6px 0">' +
+      '<div style="display:flex;justify-content:space-between;padding:8px 10px;background:var(--bg);border-radius:8px"><span style="font-size:13px">Previsto (receitas − despesas, incluindo em aberto)</span><span style="font-weight:600">' + fmt(previsto) + '</span></div>' +
+      '<div style="display:flex;justify-content:space-between;padding:8px 10px;background:var(--bg);border-radius:8px"><span style="font-size:13px">Realizado (só o que já foi pago/recebido)</span><span style="font-weight:600">' + fmt(realizado) + '</span></div>' +
+      '<div style="display:flex;justify-content:space-between;padding:8px 10px;border-top:0.5px solid var(--border-light);font-size:12px;color:var(--text3)"><span>Receitas: ' + fmt(recTotal) + ' (pago: ' + fmt(recPago) + ')</span></div>' +
+      '<div style="display:flex;justify-content:space-between;padding:0 10px;font-size:12px;color:var(--text3)"><span>Despesas: ' + fmt(despTotal) + ' (pago: ' + fmt(despPago) + ')</span></div>' +
+    '</div>';
+  document.getElementById('modal-detalhe-mes').style.display = 'flex';
+}
+
 function abrirDetalheMes(mes, tipo) {
   const isPago = l => (l.situacao || 'pago') === 'pago';
   const catFiltro = document.getElementById('grafico-categoria')?.value || '';
   const subFiltro = document.getElementById('grafico-subcategoria')?.value || '';
-  const itens = DB.lancamentos
+  const itens = filtraPorDashTag(DB.lancamentos
     .filter(l => l.tipo === tipo && isPago(l) && l.data.slice(0, 7) === mes
       && (!catFiltro || l.categoria === catFiltro)
-      && (!subFiltro || l.subcategoria === subFiltro))
+      && (!subFiltro || l.subcategoria === subFiltro)))
     .sort((a, b) => b.valor - a.valor);
   const [ano, mesN] = mes.split('-');
   const nomeMs = new Date(ano, mesN - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
@@ -647,7 +670,7 @@ function abrirDetalheMes(mes, tipo) {
           const pct = ((val / total) * 100).toFixed(1);
           return '<div style="display:flex;align-items:center;gap:10px;padding:6px 0">' +
             '<div style="width:10px;height:10px;border-radius:50%;background:' + getCor(cat) + ';flex-shrink:0"></div>' +
-            '<span style="flex:1;font-size:13px">' + getNomeCat(cat) + '</span>' +
+            '<span style="flex:1;font-size:13px">' + esc(getNomeCat(cat)) + '</span>' +
             '<span style="font-size:12px;color:var(--text3)">' + pct + '%</span>' +
             '<span style="font-size:13px;font-weight:500;min-width:90px;text-align:right">' + fmt(val) + '</span>' +
           '</div>';
@@ -657,7 +680,7 @@ function abrirDetalheMes(mes, tipo) {
       itens.map(l =>
         '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:0.5px solid var(--border-light2)">' +
           '<span style="font-size:11px;color:var(--text3);min-width:50px">' + formatarData(l.data) + '</span>' +
-          '<span style="flex:1;font-size:12px">' + l.descricao + '</span>' +
+          '<span style="flex:1;font-size:12px">' + esc(l.descricao) + '</span>' +
           '<span style="font-size:12px;font-weight:500">' + fmt(l.valor) + '</span>' +
         '</div>'
       ).join('');
@@ -665,33 +688,71 @@ function abrirDetalheMes(mes, tipo) {
   document.getElementById('modal-detalhe-mes').style.display = 'flex';
 }
 
-function abrirDetalheSituacao(situacao) {
-  const hojeISO = new Date().toISOString().slice(0, 10);
-  const lancsMes = getMes(mesAtual).filter(l => l.tipo === 'despesa');
-  let itens, titulo;
-  if (situacao === 'vencidas') { itens = lancsMes.filter(l => (l.situacao||'pago')==='aberto' && l.data < hojeISO); titulo = 'Vencidas'; }
-  else if (situacao === 'vencem-hoje') { itens = lancsMes.filter(l => (l.situacao||'pago')==='aberto' && l.data === hojeISO); titulo = 'Vencem hoje'; }
-  else if (situacao === 'a-vencer') { itens = lancsMes.filter(l => (l.situacao||'pago')==='aberto' && l.data > hojeISO); titulo = 'A vencer'; }
-  else if (situacao === 'pagas') { itens = lancsMes.filter(l => (l.situacao||'pago')==='pago'); titulo = 'Pagas'; }
-  else { itens = lancsMes; titulo = 'Total do período'; }
-  itens = itens.sort((a, b) => a.data.localeCompare(b.data));
-  const total = itens.reduce((a, b) => a + b.valor, 0);
+// ========================
+// SITUAÇÃO DAS CONTAS (tela de Lançamentos) — cards clicáveis que filtram a tabela
+// ========================
+let filtroSituacaoRapida = '';
 
-  document.getElementById('detalhe-mes-titulo').textContent = titulo + ' · ' + mesAtual;
-  document.getElementById('detalhe-mes-total').textContent = fmt(total);
-  const corpo = document.getElementById('detalhe-mes-corpo');
-  if (!itens.length) {
-    corpo.innerHTML = '<div style="text-align:center;color:var(--text3);padding:20px">Nenhum lançamento nessa situação</div>';
-  } else {
-    corpo.innerHTML = itens.map(l =>
-      '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:0.5px solid var(--border-light2)">' +
-        '<span style="font-size:11px;color:var(--text3);min-width:50px">' + formatarData(l.data) + '</span>' +
-        '<span style="flex:1;font-size:12px">' + l.descricao + '</span>' +
-        '<span style="font-size:12px;font-weight:500">' + fmt(l.valor) + '</span>' +
-      '</div>'
-    ).join('');
+function calcularSituacaoLancamentos() {
+  const status = document.getElementById('filtro-status')?.value || '';
+  const tipo = document.getElementById('filtro-tipo')?.value || '';
+  const cat = document.getElementById('filtro-categoria')?.value || '';
+  const tag = document.getElementById('filtro-tag')?.value || '';
+  const busca = (document.getElementById('busca-global')?.value || '').trim().toLowerCase();
+  const dataIni = document.getElementById('filtro-data-inicio')?.value || '';
+  const dataFim = document.getElementById('filtro-data-fim')?.value || '';
+
+  let base = DB.lancamentos.filter(l => l.tipo === 'despesa' || l.tipo === 'receita');
+  if (status) base = base.filter(l => l.status === status || (status === 'interno' && l.tipo === 'interno'));
+  if (tipo === 'receita' || tipo === 'despesa') base = base.filter(l => l.tipo === tipo);
+  if (cat) base = base.filter(l => l.categoria === cat);
+  if (tag) base = base.filter(l => (l.tags || []).includes(tag));
+  if (busca) base = base.filter(l =>
+    l.descricao.toLowerCase().includes(busca) ||
+    getNomeCat(l.categoria).toLowerCase().includes(busca) ||
+    (l.subcategoria || '').toLowerCase().includes(busca) ||
+    (l.tags || []).some(t => t.toLowerCase().includes(busca))
+  );
+  if (dataIni) base = base.filter(l => l.data >= dataIni);
+  if (dataFim) base = base.filter(l => l.data <= dataFim);
+
+  const hojeISO = dataLocalISO();
+  const vencidas = base.filter(l => (l.situacao || 'pago') === 'aberto' && l.data < hojeISO).reduce((a, b) => a + b.valor, 0);
+  const vencemHoje = base.filter(l => (l.situacao || 'pago') === 'aberto' && l.data === hojeISO).reduce((a, b) => a + b.valor, 0);
+  const aVencer = base.filter(l => (l.situacao || 'pago') === 'aberto' && l.data > hojeISO).reduce((a, b) => a + b.valor, 0);
+  const pagas = base.filter(l => (l.situacao || 'pago') === 'pago').reduce((a, b) => a + b.valor, 0);
+  return { vencidas, vencemHoje, aVencer, pagas, total: vencidas + vencemHoje + aVencer + pagas };
+}
+
+function renderSituacaoLancamentos() {
+  const wrap = document.getElementById('situacao-lancamentos');
+  if (!wrap) return;
+  const s = calcularSituacaoLancamentos();
+  const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = fmt(v); };
+  setTxt('sit-l-vencidas', s.vencidas);
+  setTxt('sit-l-vencem-hoje', s.vencemHoje);
+  setTxt('sit-l-a-vencer', s.aVencer);
+  setTxt('sit-l-pagas', s.pagas);
+  setTxt('sit-l-total', s.total);
+  document.querySelectorAll('#situacao-lancamentos .fp-card').forEach(c => {
+    c.classList.toggle('fp-card-active', c.dataset.situacao === filtroSituacaoRapida);
+  });
+}
+
+function aplicarFiltroSituacaoRapida(situacao) {
+  filtroSituacaoRapida = (filtroSituacaoRapida === situacao) ? '' : situacao;
+  const selSituacao = document.getElementById('filtro-situacao');
+  if (selSituacao) {
+    if (filtroSituacaoRapida === 'vencidas' || filtroSituacaoRapida === 'vencem-hoje' || filtroSituacaoRapida === 'a-vencer') selSituacao.value = 'aberto';
+    else if (filtroSituacaoRapida === 'pagas') selSituacao.value = 'pago';
+    else selSituacao.value = '';
   }
-  document.getElementById('modal-detalhe-mes').style.display = 'flex';
+  renderLancamentos();
+}
+
+function mudarFiltroSituacaoManual() {
+  filtroSituacaoRapida = '';
+  renderLancamentos();
 }
 
 function renderChartPatrimonio() {
@@ -726,7 +787,7 @@ function ordenarPor(col) {
 function aplicarFiltroRapido(tipo) {
   const hoje = new Date();
   const y = hoje.getFullYear(), m = hoje.getMonth();
-  const fmt = d => d.toISOString().slice(0, 10);
+  const fmt = d => dataLocalISO(d);
   let ini = '', fim = '';
   if (tipo === 'mes_atual') { ini = fmt(new Date(y, m, 1)); fim = fmt(new Date(y, m + 1, 0)); }
   else if (tipo === 'mes_anterior') { ini = fmt(new Date(y, m - 1, 1)); fim = fmt(new Date(y, m, 0)); }
@@ -788,6 +849,14 @@ function renderLancamentos() {
   const situacaoFiltro = document.getElementById('filtro-situacao')?.value || '';
   if (situacaoFiltro) lista = lista.filter(l => (l.situacao || 'pago') === situacaoFiltro);
 
+  const hojeISO = dataLocalISO();
+  if (filtroSituacaoRapida === 'vencidas') lista = lista.filter(l => (l.situacao||'pago')==='aberto' && l.data < hojeISO);
+  else if (filtroSituacaoRapida === 'vencem-hoje') lista = lista.filter(l => (l.situacao||'pago')==='aberto' && l.data === hojeISO);
+  else if (filtroSituacaoRapida === 'a-vencer') lista = lista.filter(l => (l.situacao||'pago')==='aberto' && l.data > hojeISO);
+  else if (filtroSituacaoRapida === 'pagas') lista = lista.filter(l => (l.situacao||'pago')==='pago');
+
+  renderSituacaoLancamentos();
+
   // Atualiza setas nos cabeçalhos
   document.querySelectorAll('.th-sort').forEach(th => {
     const col = th.dataset.col;
@@ -813,28 +882,44 @@ function renderLancamentos() {
     const badgeSituacao = emAberto
       ? '<span class="tx-badge" style="background:#fef9c3;color:#a16207">○ Em aberto</span>'
       : '<span class="tx-badge" style="background:#dcfce7;color:#166534">✓ Pago</span>';
-    const fpgto = l.formaPagamento ? '<span style="font-size:10px;color:var(--text3)"> · ' + (nomesFormaPgto[l.formaPagamento] || l.formaPagamento) + '</span>' : '';
+    const fpgto = l.formaPagamento ? '<span style="font-size:10px;color:var(--text3)"> · ' + esc(nomesFormaPgto[l.formaPagamento] || l.formaPagamento) + '</span>' : '';
     const isInvest = l.tipo === 'investimento';
     const amtClass = isInterno ? 'neu' : l.tipo === 'receita' ? 'pos' : isInvest ? 'inv' : 'neg';
     const amtPrefix = isInterno ? '' : l.tipo === 'receita' ? '+' : isInvest ? '~' : '-';
-    const subcatStr = l.subcategoria ? ' › ' + l.subcategoria : '';
-    const tagsStr = (l.tags||[]).map(t=>'<span class="tag-pill">'+t+'</span>').join('');
+    const subcatStr = l.subcategoria ? ' › ' + esc(l.subcategoria) : '';
+    const tagsStr = (l.tags||[]).map(t=>'<span class="tag-pill">'+esc(t)+'</span>').join('');
     tbody.innerHTML += '<tr' + (emAberto ? ' style="background:#fffdf0"' : '') + '>' +
       '<td style="width:30px;text-align:center"><input type="checkbox" class="lanc-check" data-id="' + l.id + '" onchange="atualizarBarraLote()" style="width:14px;height:14px;cursor:pointer"></td>' +
       '<td>' + formatarData(l.data) + '</td>' +
-      '<td>' + l.descricao + fpgto + (tagsStr ? '<br><span style="margin-top:2px;display:flex;gap:4px">' + tagsStr + '</span>' : '') + '</td>' +
-      '<td>' + (isInterno ? '<span class="tag-interno">Interno</span>' : getNomeCat(l.categoria) + subcatStr) + '</td>' +
+      '<td>' + esc(l.descricao) + fpgto + (tagsStr ? '<br><span style="margin-top:2px;display:flex;gap:4px">' + tagsStr + '</span>' : '') + '</td>' +
+      '<td>' + (isInterno ? '<span class="tag-interno">Interno</span>' : esc(getNomeCat(l.categoria)) + subcatStr) + '</td>' +
       '<td><span style="text-transform:capitalize">' + l.tipo + '</span></td>' +
       '<td class="tx-amount ' + amtClass + '">' + amtPrefix + ' ' + fmt(l.valor) + '</td>' +
       '<td><div class="status-cell">' + badgeSituacao + badge + '</div></td>' +
       '<td>' +
-        (emAberto ? '<button class="btn" style="font-size:11px;padding:4px 8px;color:#16a34a;border-color:#86efac" title="Marcar como pago" onclick="darBaixaLancamento(\'' + l.id + '\')"><i class="ti ti-check"></i></button> ' : '') +
+        (emAberto ? '<button class="btn" style="font-size:11px;padding:4px 8px;color:#16a34a;border-color:#86efac" title="Marcar como pago" onclick="darBaixaLancamento(\'' + l.id + '\')"><i class="ti ti-check"></i></button> ' : '<button class="btn" style="font-size:11px;padding:4px 8px;color:#a16207;border-color:#fde047" title="Reabrir (desfazer baixa)" onclick="reabrirLancamento(\'' + l.id + '\')"><i class="ti ti-rotate-2"></i></button> ') +
         (l.status === 'pendente' ? '<button class="btn" style="font-size:11px;padding:4px 8px" onclick="abrirValidar(\'' + l.id + '\')">Validar</button> ' : '') +'<button class="btn" style="font-size:11px;padding:4px 8px" onclick="abrirEditar(\'' + l.id + '\')"><i class="ti ti-pencil"></i></button> ' +
         '<button class="btn" style="font-size:11px;padding:4px 8px;color:var(--red);border-color:var(--red)" onclick="excluirLancamento(\'' + l.id + '\')"><i class="ti ti-trash"></i></button>' +
       '</td>' +
     '</tr>';
   });
   atualizarBarraLote();
+
+  // Totalizador do que está filtrado
+  const totEl = document.getElementById('totalizador');
+  if (totEl) {
+    const tRec = lista.filter(l => l.tipo === 'receita').reduce((a, b) => a + b.valor, 0);
+    const tDesp = lista.filter(l => l.tipo === 'despesa').reduce((a, b) => a + b.valor, 0);
+    const tInv = lista.filter(l => l.tipo === 'investimento').reduce((a, b) => a + b.valor, 0);
+    const saldo = tRec - tDesp;
+    totEl.style.display = 'flex';
+    totEl.innerHTML =
+      '<span style="font-size:12px;color:var(--text3)">' + lista.length + ' lançamento(s)</span>' +
+      '<span style="font-size:12px">Receitas: <b style="color:#16a34a">' + fmt(tRec) + '</b></span>' +
+      '<span style="font-size:12px">Despesas: <b style="color:#dc2626">' + fmt(tDesp) + '</b></span>' +
+      (tInv > 0 ? '<span style="font-size:12px">Investimentos: <b style="color:#2563eb">' + fmt(tInv) + '</b></span>' : '') +
+      '<span style="font-size:12px;margin-left:auto">Saldo (rec − desp): <b style="color:' + (saldo >= 0 ? '#16a34a' : '#dc2626') + '">' + (saldo < 0 ? '- ' : '') + fmt(Math.abs(saldo)) + '</b></span>';
+  }
 }
 
 // ========================
@@ -1305,6 +1390,7 @@ async function classificarComIA(lancamentos) {
     });
   } catch(e) {
     console.error('Erro na classificação com IA:', e);
+    toast('⚠️ Classificação por IA falhou — classifique manualmente ou tente reimportar');
   }
 
   // Remove loading e re-renderiza
@@ -1473,7 +1559,7 @@ function renderPreviewTabela(lancamentos) {
     else if (jaValidado) regraTag = '<span style="font-size:10px;padding:1px 5px;border-radius:99px;background:#dcfce7;color:#166534;margin-left:4px">✓</span>';
 
     const catsFiltradas = DB.categorias.filter(function(c) { return getCategoriasPorTipo(l.tipo).includes(c.id); });
-    const catOpts = '<option value="">— categoria —</option>' + catsFiltradas.map(function(c) { return '<option value="' + c.id + '"' + (c.id === l.categoria ? ' selected' : '') + '>' + c.nome + '</option>'; }).join('');
+    const catOpts = '<option value="">— categoria —</option>' + catsFiltradas.map(function(c) { return '<option value="' + c.id + '"' + (c.id === l.categoria ? ' selected' : '') + '>' + esc(c.nome) + '</option>'; }).join('');
     const subcats = getSubcats(l.categoria);
     const subcatOpts = '<option value="">—</option>' + subcats.map(function(s) { return '<option value="' + s + '"' + (s === l.subcategoria ? ' selected' : '') + '>' + s + '</option>'; }).join('');
 
@@ -1484,7 +1570,7 @@ function renderPreviewTabela(lancamentos) {
           return '<label style="display:inline-flex;align-items:center;gap:3px;margin:1px 2px;cursor:pointer;padding:2px 7px;border-radius:99px;border:0.5px solid ' + (sel ? tag.cor : 'var(--border-light)') + ';background:' + (sel ? tag.cor + '22' : 'transparent') + ';font-size:11px;white-space:nowrap">' +
             '<input type="checkbox" value="' + tag.nome + '" ' + (sel ? 'checked' : '') + ' style="display:none" onchange="atualizarTagsPreview(' + i + ')">' +
             '<span style="width:6px;height:6px;border-radius:50%;background:' + tag.cor + '"></span>' +
-            '<span style="color:' + (sel ? tag.cor : 'var(--text2)') + '">' + tag.nome + '</span>' +
+            '<span style="color:' + (sel ? tag.cor : 'var(--text2)') + '">' + esc(tag.nome) + '</span>' +
           '</label>';
         }).join('')
       : '<span style="font-size:11px;color:var(--text3)">—</span>';
@@ -1507,9 +1593,9 @@ function renderPreviewTabela(lancamentos) {
       '</select></td>' +
       // Descrição
       '<td><div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">' +
-        '<input type="text" value="' + l.descricao.replace(/"/g, '&quot;') + '" style="flex:1;min-width:130px;padding:3px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:12px" onchange="previewLancs[' + i + '].descricao=this.value">' +
+        '<input type="text" value="' + esc(l.descricao) + '" style="flex:1;min-width:130px;padding:3px 6px;border:0.5px solid var(--border-light);border-radius:6px;font-size:12px" onchange="previewLancs[' + i + '].descricao=this.value">' +
         regraTag +
-        (l._matchSugerido ? '<span style="font-size:10px;padding:1px 6px;border-radius:99px;background:#cffafe;color:#0e7490;cursor:help;white-space:nowrap" title="Corresponde a: ' + l._matchSugerido.descricao.replace(/"/g,'&quot;') + ' (' + (l._matchSugerido.tipoMatch === 'exato' ? 'data e valor exatos' : 'aproximado, ' + l._matchSugerido.difDias + ' dias') + ')">🔗 ' + (l._matchSugerido.tipo === 'previsto' ? 'previsto' : 'já lançado') + '</span>' : '') +
+        (l._matchSugerido ? '<span style="font-size:10px;padding:1px 6px;border-radius:99px;background:#cffafe;color:#0e7490;cursor:help;white-space:nowrap" title="Corresponde a: ' + esc(l._matchSugerido.descricao) + ' (' + (l._matchSugerido.tipoMatch === 'exato' ? 'data e valor exatos' : 'aproximado, ' + l._matchSugerido.difDias + ' dias') + ')">🔗 ' + (l._matchSugerido.tipo === 'previsto' ? 'previsto' : 'já lançado') + '</span>' : '') +
       '</div></td>' +
       // Categoria
       '<td style="min-width:140px">' +
@@ -1613,16 +1699,6 @@ function atualizarTagsPreview(i) {
   });
 }
 
-function ignorarPreview(i) {
-  const l = window.previewLancs[i];
-  if (!DB.ignorados) DB.ignorados = [];
-  DB.ignorados.push({ ...l, ignoradoEm: new Date().toISOString() });
-  window.previewLancs.splice(i, 1);
-  salvarDB();
-  atualizarBadgeIgnorados();
-  if (window.previewLancs.length) renderPreviewTabela(window.previewLancs);
-  else { document.getElementById('preview-importacao').style.display = 'none'; toast('Todos ignorados'); }
-}
 
 function removerPreview(i) {
   window.previewLancs.splice(i, 1);
@@ -1693,7 +1769,7 @@ function renderIgnorados() {
     ignorados.map((l, i) =>
       '<tr>' +
         '<td style="font-size:12px">' + formatarData(l.data) + '</td>' +
-        '<td style="font-size:12px">' + l.descricao + '</td>' +
+        '<td style="font-size:12px">' + esc(l.descricao) + '</td>' +
         '<td class="tx-amount ' + (l.tipo === 'receita' ? 'pos' : 'neg') + '" style="font-size:12px">' + fmt(l.valor) + '</td>' +
         '<td style="font-size:11px;color:var(--text3)">' + new Date(l.ignoradoEm).toLocaleDateString('pt-BR') + '</td>' +
         '<td><button class="btn" style="font-size:11px;padding:3px 8px" onclick="restaurarIgnorado(' + i + ')"><i class="ti ti-refresh"></i> Restaurar</button></td>' +
@@ -1896,22 +1972,33 @@ function renderDRE() {
   const lancs = getMes(mes);
   const receitas = lancs.filter(l => l.tipo === 'receita');
   const despesas = lancs.filter(l => l.tipo === 'despesa');
+  const investimentos = lancs.filter(l => l.tipo === 'investimento');
   const totalRec = receitas.reduce((a,b) => a+b.valor, 0);
   const totalDesp = despesas.reduce((a,b) => a+b.valor, 0);
+  const totalInv = investimentos.reduce((a,b) => a+b.valor, 0);
   const resultado = totalRec - totalDesp;
+  const sobraLiquida = resultado - totalInv;
   const porCat = {};
   despesas.forEach(l => { porCat[l.categoria] = (porCat[l.categoria]||0) + l.valor; });
   const table = document.getElementById('dre-table');
   if (!table) return;
+
+  // Rótulo do regime — DRE é competência (inclui em aberto); Dashboard é caixa. Diferença intencional, deixar explícita.
+  const subEl = document.getElementById('dre-regime-sub');
+  if (subEl) subEl.textContent = 'Regime de competência — inclui contas pagas e em aberto do mês';
+
   table.innerHTML =
     '<tr class="dre-section"><td colspan="2">Receitas</td></tr>' +
-    (receitas.length ? receitas.map(l => '<tr><td style="padding-left:24px">'+l.descricao+'</td><td class="dre-right tx-amount pos">'+fmt(l.valor)+'</td></tr>').join('') : '<tr><td style="padding-left:24px;color:var(--text3)">Nenhuma receita</td><td></td></tr>') +
+    (receitas.length ? receitas.map(l => '<tr><td style="padding-left:24px">'+esc(l.descricao)+((l.situacao||'pago')==='aberto'?' <span style="font-size:10px;color:#a16207">(em aberto)</span>':'')+'</td><td class="dre-right tx-amount pos">'+fmt(l.valor)+'</td></tr>').join('') : '<tr><td style="padding-left:24px;color:var(--text3)">Nenhuma receita</td><td></td></tr>') +
     '<tr><td style="padding-left:24px;font-weight:500">Total receitas</td><td class="dre-right tx-amount pos">'+fmt(totalRec)+'</td></tr>' +
     '<tr class="dre-section"><td colspan="2">Despesas por categoria</td></tr>' +
-    Object.entries(porCat).sort((a,b)=>b[1]-a[1]).map(([cat,val]) => '<tr><td style="padding-left:24px">'+getNomeCat(cat)+'</td><td class="dre-right tx-amount neg">- '+fmt(val)+'</td></tr>').join('') +
+    Object.entries(porCat).sort((a,b)=>b[1]-a[1]).map(([cat,val]) => '<tr><td style="padding-left:24px">'+esc(getNomeCat(cat))+'</td><td class="dre-right tx-amount neg">- '+fmt(val)+'</td></tr>').join('') +
     (!Object.keys(porCat).length ? '<tr><td style="padding-left:24px;color:var(--text3)">Nenhuma despesa</td><td></td></tr>' : '') +
     '<tr><td style="padding-left:24px;font-weight:500">Total despesas</td><td class="dre-right tx-amount neg">- '+fmt(totalDesp)+'</td></tr>' +
-    '<tr class="dre-total"><td>Resultado do mês</td><td class="dre-right tx-amount '+(resultado>=0?'pos':'neg')+'">'+(resultado>=0?'':'- ')+fmt(resultado)+'</td></tr>';
+    '<tr class="dre-total"><td>Resultado do mês (receitas − despesas)</td><td class="dre-right tx-amount '+(resultado>=0?'pos':'neg')+'">'+(resultado>=0?'':'- ')+fmt(Math.abs(resultado))+'</td></tr>' +
+    '<tr class="dre-section"><td colspan="2">Destinação do resultado</td></tr>' +
+    '<tr><td style="padding-left:24px">(−) Aportes em investimento</td><td class="dre-right tx-amount inv">'+(totalInv>0?'- '+fmt(totalInv):fmt(0))+'</td></tr>' +
+    '<tr class="dre-total"><td>(=) Sobra líquida em conta</td><td class="dre-right tx-amount '+(sobraLiquida>=0?'pos':'neg')+'">'+(sobraLiquida>=0?'':'- ')+fmt(Math.abs(sobraLiquida))+'</td></tr>';
 }
 
 // ========================
@@ -1928,6 +2015,7 @@ function switchNaturezaPlano(nat, el) {
 }
 
 // Comparador de códigos hierárquicos (1.2 < 1.10 < 2.1)
+// [RESERVADA] Base da futura ordenação hierárquica por código do plano de contas (feature na fila — 'visual em escadinha')
 function compararCodigos(a, b) {
   const pa = (a.codigo || '9999').split('.').map(Number);
   const pb = (b.codigo || '9999').split('.').map(Number);
@@ -2155,10 +2243,25 @@ function salvarNovaOuEditadaCategoria() {
 }
 
 function excluirCategoria(id) {
-  if (!confirm('Excluir categoria? Os lançamentos ficarão como "outros".')) return;
+  const emUso = DB.lancamentos.filter(l => l.categoria === id).length;
+  const regrasUso = DB.regras.filter(r => r.categoria === id).length;
+  let msg = 'Excluir categoria?';
+  if (emUso) msg += '\n\n' + emUso + ' lançamento(s) serão movidos para "Outros".';
+  if (regrasUso) msg += '\n' + regrasUso + ' regra(s) de classificação que apontam para ela serão excluídas.';
+  if (!confirm(msg)) return;
+
+  // Reatribui lançamentos para "outros" (nunca deixar órfão apontando pra categoria inexistente)
+  DB.lancamentos.forEach(l => {
+    if (l.categoria === id) { l.categoria = 'outros'; l.subcategoria = ''; }
+  });
+  // Remove regras que classificariam para uma categoria que não existe mais
+  DB.regras = DB.regras.filter(r => r.categoria !== id);
+  // Remove orçamento da categoria
+  delete DB.orcamentos[id];
+
   DB.categorias = DB.categorias.filter(c => c.id !== id);
   salvarDB(); preencherSelects(); renderPlanoContas();
-  toast('Categoria excluída');
+  toast('Categoria excluída' + (emUso ? ' — ' + emUso + ' lançamento(s) movidos para "Outros"' : ''));
 }
 
 // ========================
@@ -2271,55 +2374,84 @@ function excluirFormaPagamento(id) {
 }
 
 // ---- Ciclo de fatura (fechamento/vencimento) ----
-function getCicloFatura(diaFechamento, diaVencimento, dataRef) {
-  dataRef = dataRef || new Date();
-  const anoRef = dataRef.getFullYear(), mesRef = dataRef.getMonth(), diaHoje = dataRef.getDate();
-  let anoFech = anoRef, mesFech = mesRef;
-  if (diaHoje > diaFechamento) { mesFech += 1; if (mesFech > 11) { mesFech = 0; anoFech++; } }
-  const dataFechamento = new Date(anoFech, mesFech, diaFechamento);
-  let mesInicio = mesFech - 1, anoInicio = anoFech;
+
+
+// Tag ativa no filtro do dashboard (filtro global — todos os widgets respondem)
+function getDashTag() {
+  return (document.getElementById('dash-filtro-tag-select')?.value || '').trim().toLowerCase();
+}
+function filtraPorDashTag(arr, tagOverride) {
+  const tag = tagOverride !== undefined ? tagOverride : getDashTag();
+  return tag ? arr.filter(l => (l.tags || []).some(t => t.toLowerCase() === tag)) : arr;
+}
+
+// Ciclo "dono" de um mês-calendário específico (ex: "a fatura de Junho" = a que fecha em junho).
+// Usado pra fatura navegar junto com o mês selecionado no dashboard, em vez de sempre mostrar o ciclo real de hoje.
+function getCicloFaturaDoMes(mesStr, diaFechamento, diaVencimento) {
+  const [ano, mes] = mesStr.split('-').map(Number); // mes: 1-indexado
+  const dataFechamento = new Date(ano, mes - 1, diaFechamento);
+  let mesInicio = mes - 2, anoInicio = ano;
   if (mesInicio < 0) { mesInicio = 11; anoInicio--; }
   const dataInicio = new Date(anoInicio, mesInicio, diaFechamento + 1);
-  let anoVenc = anoFech, mesVenc = mesFech;
+  let anoVenc = ano, mesVenc = mes - 1;
   if (diaVencimento <= diaFechamento) { mesVenc += 1; if (mesVenc > 11) { mesVenc = 0; anoVenc++; } }
   const dataVencimento = new Date(anoVenc, mesVenc, diaVencimento);
   return { inicio: dataInicio, fechamento: dataFechamento, vencimento: dataVencimento };
 }
 
-function dataParaISO(d) { return d.toISOString().slice(0, 10); }
+function dataParaISO(d) { return dataLocalISO(d); }
 
 function renderFaturaCartao() {
   const card = document.getElementById('card-fatura-cartao');
-  if (!card) return;
-  const forma = DB.formasPagamento.find(f => f.tipoCiclo === 'fatura');
-  if (!forma) { card.style.display = 'none'; return; }
+  const lista = document.getElementById('lista-faturas-cartao');
+  if (!card || !lista) return;
+  const formas = DB.formasPagamento.filter(f => f.tipoCiclo === 'fatura');
+  if (!formas.length) { card.style.display = 'none'; return; }
   card.style.display = 'block';
 
   const hoje = new Date();
-  const ciclo = getCicloFatura(forma.fechamento, forma.vencimento, hoje);
-  const iniISO = dataParaISO(ciclo.inicio), fechISO = dataParaISO(ciclo.fechamento);
+  const mesRealAtual = mesLocalISO(hoje);
 
-  const itens = DB.lancamentos.filter(l => l.formaPagamento === forma.id && l.tipo === 'despesa' && l.data >= iniISO && l.data <= fechISO);
-  const total = itens.reduce((a, b) => a + b.valor, 0);
+  lista.innerHTML = formas.map(forma => {
+    const ciclo = getCicloFaturaDoMes(mesAtual, forma.fechamento, forma.vencimento);
+    const iniISO = dataParaISO(ciclo.inicio), fechISO = dataParaISO(ciclo.fechamento);
+    const itens = filtraPorDashTag(DB.lancamentos.filter(l => l.formaPagamento === forma.id && l.tipo === 'despesa' && l.data >= iniISO && l.data <= fechISO));
+    const total = itens.reduce((a, b) => a + b.valor, 0);
 
-  const diasParaFechar = Math.ceil((ciclo.fechamento - hoje) / 86400000);
-  const diasParaVencer = Math.ceil((ciclo.vencimento - hoje) / 86400000);
+    let statusFecha, statusVence;
+    if (mesAtual === mesRealAtual) {
+      const diasParaFechar = Math.ceil((ciclo.fechamento - hoje) / 86400000);
+      const diasParaVencer = Math.ceil((ciclo.vencimento - hoje) / 86400000);
+      statusFecha = diasParaFechar <= 0 ? 'fecha hoje' : 'fecha em ' + diasParaFechar + ' dia(s)';
+      statusVence = 'vence dia ' + pad2(forma.vencimento) + ' (' + (diasParaVencer <= 0 ? 'hoje' : 'em ' + diasParaVencer + ' dia(s)') + ')';
+    } else if (mesAtual < mesRealAtual) {
+      statusFecha = 'fatura fechada em ' + formatarData(fechISO);
+      statusVence = 'venceu dia ' + pad2(forma.vencimento);
+    } else {
+      statusFecha = 'ciclo futuro — fecha em ' + formatarData(fechISO);
+      statusVence = 'vence dia ' + pad2(forma.vencimento);
+    }
 
-  document.getElementById('fatura-cartao-nome').textContent = forma.nome;
-  document.getElementById('fatura-cartao-total').textContent = fmt(total);
-  document.getElementById('fatura-cartao-periodo').textContent = formatarData(iniISO) + ' – ' + formatarData(fechISO);
-  document.getElementById('fatura-cartao-fecha').textContent = diasParaFechar <= 0 ? 'fecha hoje' : 'fecha em ' + diasParaFechar + ' dia(s)';
-  document.getElementById('fatura-cartao-vence').textContent = 'vence dia ' + String(forma.vencimento).padStart(2, '0') + ' (' + (diasParaVencer <= 0 ? 'hoje' : 'em ' + diasParaVencer + ' dia(s)') + ')';
+    return '<div style="cursor:pointer" onclick="abrirDetalheFatura(\'' + forma.id + '\')">' +
+      '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap">' +
+        '<span style="font-size:13px;font-weight:500">' + esc(forma.nome) + '</span>' +
+        '<span style="font-size:11px;color:var(--text3)">' + formatarData(iniISO) + ' – ' + formatarData(fechISO) + '</span>' +
+      '</div>' +
+      '<div style="font-size:24px;font-weight:600;margin:4px 0 4px">' + fmt(total) + '</div>' +
+      '<div style="display:flex;gap:12px;font-size:12px;color:var(--text2);flex-wrap:wrap">' +
+        '<span>' + statusFecha + '</span><span>' + statusVence + '</span>' +
+      '</div>' +
+    '</div>';
+  }).join('<div style="border-top:0.5px solid var(--border-light)"></div>');
 }
 
-function abrirDetalheFatura() {
-  const forma = DB.formasPagamento.find(f => f.tipoCiclo === 'fatura');
-  if (!forma) return;
-  const hoje = new Date();
-  const ciclo = getCicloFatura(forma.fechamento, forma.vencimento, hoje);
+function abrirDetalheFatura(formaId) {
+  const forma = formaId ? getFormaPagamento(formaId) : DB.formasPagamento.find(f => f.tipoCiclo === 'fatura');
+  if (!forma || forma.tipoCiclo !== 'fatura') return;
+  const ciclo = getCicloFaturaDoMes(mesAtual, forma.fechamento, forma.vencimento);
   const iniISO = dataParaISO(ciclo.inicio), fechISO = dataParaISO(ciclo.fechamento);
-  const itens = DB.lancamentos
-    .filter(l => l.formaPagamento === forma.id && l.tipo === 'despesa' && l.data >= iniISO && l.data <= fechISO)
+  const itens = filtraPorDashTag(DB.lancamentos
+    .filter(l => l.formaPagamento === forma.id && l.tipo === 'despesa' && l.data >= iniISO && l.data <= fechISO))
     .sort((a, b) => b.data.localeCompare(a.data));
   const total = itens.reduce((a, b) => a + b.valor, 0);
 
@@ -2332,9 +2464,10 @@ function abrirDetalheFatura() {
     corpo.innerHTML = itens.map(l =>
       '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:0.5px solid var(--border-light2)">' +
         '<span style="font-size:11px;color:var(--text3);min-width:50px">' + formatarData(l.data) + '</span>' +
-        '<span style="flex:1;font-size:12px">' + l.descricao + '</span>' +
+        '<span style="flex:1;font-size:12px">' + esc(l.descricao) + '</span>' +
         '<span style="font-size:12px;font-weight:500">' + fmt(l.valor) + '</span>' +
       '</div>'
+
     ).join('');
   }
   document.getElementById('modal-detalhe-mes').style.display = 'flex';
@@ -2354,8 +2487,8 @@ function renderGastosPorFormaPagamento(lancsFiltrados) {
     return;
   }
   wrap.innerHTML = entradas.map(([formaId, val]) => {
-    const nome = getNomeFormaPagamento(formaId);
-    return '<div class="fp-card" onclick="abrirDetalheFormaPagamento(\'' + formaId + '\')" style="cursor:pointer;flex:1;min-width:120px;padding:12px;border:0.5px solid var(--border-light);border-radius:10px;background:var(--card)">' +
+    const nome = esc(getNomeFormaPagamento(formaId));
+    return '<div class="fp-card" onclick="abrirDetalheFormaPagamento(\'' + formaId + '\')" style="cursor:pointer;padding:12px;border:0.5px solid var(--border-light);border-radius:10px;background:var(--card)">' +
       '<div style="font-size:11px;color:var(--text3);margin-bottom:4px">' + nome + '</div>' +
       '<div style="font-size:16px;font-weight:600">' + fmt(val) + '</div>' +
     '</div>';
@@ -2363,7 +2496,7 @@ function renderGastosPorFormaPagamento(lancsFiltrados) {
 }
 
 function abrirDetalheFormaPagamento(formaId) {
-  const lancsMes = getMes(mesAtual);
+  const lancsMes = filtraPorDashTag(getMes(mesAtual));
   const itens = lancsMes.filter(l => l.tipo === 'despesa' && l.formaPagamento === formaId).sort((a, b) => b.data.localeCompare(a.data));
   const total = itens.reduce((a, b) => a + b.valor, 0);
   document.getElementById('detalhe-mes-titulo').textContent = getNomeFormaPagamento(formaId) + ' · ' + mesAtual;
@@ -2375,7 +2508,7 @@ function abrirDetalheFormaPagamento(formaId) {
     corpo.innerHTML = itens.map(l =>
       '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:0.5px solid var(--border-light2)">' +
         '<span style="font-size:11px;color:var(--text3);min-width:50px">' + formatarData(l.data) + '</span>' +
-        '<span style="flex:1;font-size:12px">' + l.descricao + '</span>' +
+        '<span style="flex:1;font-size:12px">' + esc(l.descricao) + '</span>' +
         '<span style="font-size:12px;font-weight:500">' + fmt(l.valor) + '</span>' +
       '</div>'
     ).join('');
@@ -2436,7 +2569,7 @@ function gerarResumoCoach() {
   const evolPat = patAtual - patAnt;
   const topGastos = Object.entries(porCat).sort((a,b)=>b[1]-a[1]).slice(0,3);
   // Alertas de orçamento
-  const alertasOrc = Object.entries(porCat).filter(([cat,val]) => DB.orcamentos[cat] && val > DB.orcamentos[cat]).map(([cat,val]) => '⚠️ ' + getNomeCat(cat) + ': estourou em ' + fmt(val - DB.orcamentos[cat]));
+  const alertasOrc = Object.entries(porCat).filter(([cat,val]) => DB.orcamentos[cat] && val > DB.orcamentos[cat]).map(([cat,val]) => '⚠️ ' + esc(getNomeCat(cat)) + ': estourou em ' + fmt(val - DB.orcamentos[cat]));
   const texto =
     '📊 RESUMO FINANCEIRO — ' + nomeMes.toUpperCase() + '\n' +
     '━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n' +
@@ -2479,7 +2612,7 @@ function darBaixaLancamento(id) {
   document.getElementById('baixa-descricao').textContent = l.descricao;
   document.getElementById('baixa-info').textContent = getNomeCat(l.categoria) + (l.subcategoria ? ' › ' + l.subcategoria : '') + ' · vencimento ' + formatarData(l.data);
   // Data sugerida: hoje (data real do pagamento)
-  document.getElementById('baixa-data').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('baixa-data').value = dataLocalISO();
   document.getElementById('baixa-valor').value = l.valor;
   document.getElementById('baixa-forma-pagamento').value = l.formaPagamento || '';
   document.getElementById('modal-baixa').style.display = 'flex';
@@ -2501,7 +2634,7 @@ function confirmarBaixa() {
   fecharModal('modal-baixa');
   try { renderLancamentos(); } catch(e) {}
   renderDashboard();
-  toast('✓ Baixa realizada — "' + l.descricao + '"');
+  toast('✓ Baixa realizada — "' + esc(l.descricao) + '"');
 }
 
 // Baixa direta sem confirmação (usada no lote)
@@ -2680,9 +2813,9 @@ function exportarDados() {
   const blob = new Blob([JSON.stringify(DB,null,2)],{type:'application/json'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'backup-financeiro-'+new Date().toISOString().slice(0,10)+'.json';
+  a.download = 'backup-financeiro-'+dataLocalISO()+'.json';
   a.click();
-  localStorage.setItem('ultimo-backup', new Date().toISOString().slice(0,10));
+  localStorage.setItem('ultimo-backup', dataLocalISO());
   atualizarLembreteBackup();
   toast('✓ Backup salvo! Guarde o arquivo em local seguro (Drive, e-mail...)');
 }
@@ -2774,9 +2907,40 @@ function limparDados() {
   toast('Dados limpos');
 }
 
+function preencherMesRapidoManual() {
+  const sel = document.getElementById('manual-mes-rapido');
+  if (!sel) return;
+  const hoje = new Date();
+  const opcoes = [];
+  for (let i = 0; i <= 12; i++) {
+    const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+    const valor = mesLocalISO(d);
+    let label;
+    if (i === 0) label = 'Mês atual';
+    else if (i === 1) label = 'Mês anterior';
+    else {
+      const nome = d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+      label = nome.charAt(0).toUpperCase() + nome.slice(1);
+    }
+    opcoes.push('<option value="' + valor + '"' + (i === 0 ? ' selected' : '') + '>' + label + '</option>');
+  }
+  sel.innerHTML = opcoes.join('');
+}
+
+function aplicarMesRapidoManual() {
+  const mesEscolhido = document.getElementById('manual-mes-rapido').value; // 'YYYY-MM'
+  const dataAtual = document.getElementById('manual-data').value; // 'YYYY-MM-DD'
+  const diaAtual = dataAtual ? parseInt(dataAtual.slice(8, 10)) : new Date().getDate();
+  const [ano, mes] = mesEscolhido.split('-').map(Number);
+  const ultimoDiaDoMes = new Date(ano, mes, 0).getDate();
+  const dia = Math.min(diaAtual, ultimoDiaDoMes);
+  document.getElementById('manual-data').value = mesEscolhido + '-' + String(dia).padStart(2, '0');
+}
+
 function abrirModalLancamento() {
-  // Pré-preenche data de hoje e prepara selects
-  document.getElementById('manual-data').value = new Date().toISOString().slice(0, 10);
+  // Pré-preenche data de hoje (mês atual) e prepara selects
+  document.getElementById('manual-data').value = dataLocalISO();
+  preencherMesRapidoManual();
   const tipoAtual = document.getElementById('manual-tipo').value || 'despesa';
   preencherSelectCategoriaPorTipo('manual-categoria', tipoAtual, '');
   atualizarSubcatManual();
