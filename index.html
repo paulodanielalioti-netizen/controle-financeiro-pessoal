@@ -79,63 +79,35 @@
           <button class="btn" style="font-size:12px;padding:5px 12px;background:#a16207;border-color:#a16207;color:#fff" onclick="exportarDados()"><i class="ti ti-database-export"></i> Fazer backup agora</button>
         </div>
         <div class="metrics" style="grid-template-columns:repeat(3,1fr)">
-          <div class="metric-card"><div class="metric-label"><i class="ti ti-arrow-down-circle"></i> Entrou no mês</div><div class="metric-value" style="font-size:22px" id="m-receitas">R$ 0</div><div class="metric-delta" id="d-receitas"></div></div>
-          <div class="metric-card"><div class="metric-label"><i class="ti ti-arrow-up-circle"></i> Saiu no mês</div><div class="metric-value" style="font-size:22px" id="m-despesas">R$ 0</div><div class="metric-delta" id="d-despesas"></div></div>
-          <div class="metric-card"><div class="metric-label"><i class="ti ti-trending-up"></i> Investido no mês</div><div class="metric-value" style="font-size:22px" id="m-investimentos">R$ 0</div><div class="metric-delta" id="d-investimentos"></div></div>
+          <div class="metric-card"><div class="metric-label"><i class="ti ti-arrow-down-circle"></i> Receitas</div><div class="metric-value" style="font-size:22px" id="m-receitas">R$ 0</div><div class="metric-delta" id="d-receitas"></div></div>
+          <div class="metric-card"><div class="metric-label"><i class="ti ti-arrow-up-circle"></i> Despesas</div><div class="metric-value" style="font-size:22px" id="m-despesas">R$ 0</div><div class="metric-delta" id="d-despesas"></div></div>
+          <div class="metric-card"><div class="metric-label"><i class="ti ti-trending-up"></i> Investimentos</div><div class="metric-value" style="font-size:22px" id="m-investimentos">R$ 0</div><div class="metric-delta" id="d-investimentos"></div></div>
         </div>
         <div style="display:none"><span id="m-patrimonio"></span><span id="d-patrimonio"></span></div>
-
-        <!-- Situação das contas do mês -->
-        <div class="card" style="margin-bottom:16px">
-          <div class="card-header"><div><div class="card-title">Situação das contas do mês</div><div class="card-sub">Clique num card para ver os lançamentos</div></div></div>
-          <div style="display:flex;gap:10px;flex-wrap:wrap">
-            <div class="fp-card" onclick="abrirDetalheSituacao('vencidas')" style="cursor:pointer;flex:1;min-width:110px;padding:12px;border:0.5px solid var(--border-light);border-radius:10px;background:var(--card)">
-              <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Vencidas</div>
-              <div style="font-size:16px;font-weight:600;color:#ef4444" id="sit-vencidas">R$ 0</div>
-            </div>
-            <div class="fp-card" onclick="abrirDetalheSituacao('vencem-hoje')" style="cursor:pointer;flex:1;min-width:110px;padding:12px;border:0.5px solid var(--border-light);border-radius:10px;background:var(--card)">
-              <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Vencem hoje</div>
-              <div style="font-size:16px;font-weight:600;color:#d97706" id="sit-vencem-hoje">R$ 0</div>
-            </div>
-            <div class="fp-card" onclick="abrirDetalheSituacao('a-vencer')" style="cursor:pointer;flex:1;min-width:110px;padding:12px;border:0.5px solid var(--border-light);border-radius:10px;background:var(--card)">
-              <div style="font-size:11px;color:var(--text3);margin-bottom:4px">A vencer</div>
-              <div style="font-size:16px;font-weight:600" id="sit-a-vencer">R$ 0</div>
-            </div>
-            <div class="fp-card" onclick="abrirDetalheSituacao('pagas')" style="cursor:pointer;flex:1;min-width:110px;padding:12px;border:0.5px solid var(--border-light);border-radius:10px;background:var(--card)">
-              <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Pagas</div>
-              <div style="font-size:16px;font-weight:600;color:#16a34a" id="sit-pagas">R$ 0</div>
-            </div>
-            <div class="fp-card" onclick="abrirDetalheSituacao('total')" style="cursor:pointer;flex:1;min-width:110px;padding:12px;border:0.5px solid var(--border-light);border-radius:10px;background:var(--bg)">
-              <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Total do período</div>
-              <div style="font-size:16px;font-weight:600" id="sit-total">R$ 0</div>
-            </div>
-          </div>
-        </div>
 
         <!-- Fatura do cartão + Gastos por forma de pagamento -->
         <div class="row-2" style="margin-bottom:16px">
           <div class="card" id="card-fatura-cartao" style="display:none">
-            <div class="card-header"><div><div class="card-title">Fatura <span id="fatura-cartao-nome"></span></div><div class="card-sub" id="fatura-cartao-periodo">—</div></div></div>
-            <div style="cursor:pointer" onclick="abrirDetalheFatura()">
-              <div style="font-size:26px;font-weight:600;margin-bottom:6px" id="fatura-cartao-total">R$ 0</div>
-              <div style="display:flex;gap:12px;font-size:12px;color:var(--text2)">
-                <span id="fatura-cartao-fecha">—</span>
-                <span id="fatura-cartao-vence">—</span>
-              </div>
-            </div>
+            <div class="card-header"><div><div class="card-title">Faturas de cartão</div><div class="card-sub">Ciclo do mês selecionado · clique para ver os lançamentos</div></div></div>
+            <div id="lista-faturas-cartao" style="display:flex;flex-direction:column;gap:12px"></div>
           </div>
           <div class="card">
             <div class="card-header"><div><div class="card-title">Gastos por forma de pagamento</div><div class="card-sub">Neste mês · clique para ver os lançamentos</div></div></div>
-            <div id="cards-formas-pagamento" style="display:flex;gap:10px;flex-wrap:wrap"></div>
+            <div id="cards-formas-pagamento" class="fp-grid"></div>
           </div>
         </div>
 
-        <!-- A pagar / receber este mês -->
-        <div class="card" id="card-projecao" style="margin-bottom:16px;display:none">
-          <div class="card-header">
-            <div><div class="card-title">📅 A pagar / receber este mês</div><div class="card-sub" id="projecao-sub">Lançamentos em aberto do mês — gerencie na tela de Lançamentos</div></div>
+        <div class="row-2" style="margin-bottom:16px">
+          <div class="card">
+            <div class="card-header">
+              <div><div class="card-title">Gastos por categoria</div><div class="card-sub" id="dash-tag-sub">vs orçamento</div></div>
+            </div>
+            <div id="lista-categorias" class="category-list"></div>
           </div>
-          <div id="lista-em-aberto" class="tx-list"></div>
+          <div class="card">
+            <div class="card-header"><div><div class="card-title">Previsto × Realizado</div><div class="card-sub">Sobra prevista vs. já realizada — últimos 6 meses</div></div></div>
+            <div id="grafico-previsto-realizado" style="width:100%;overflow-x:auto"></div>
+          </div>
         </div>
 
         <div class="card" style="margin-bottom:16px">
@@ -163,29 +135,42 @@
           <div id="grafico-mensal" style="width:100%;overflow-x:auto"></div>
         </div>
 
-        <div class="row-2">
-          <div class="card">
-            <div class="card-header">
-              <div><div class="card-title">Gastos por categoria</div><div class="card-sub" id="dash-tag-sub">vs orçamento</div></div>
-            </div>
-            <div id="lista-categorias" class="category-list"></div>
-          </div>
-          <div class="card">
-            <div class="card-header"><div><div class="card-title">Últimos lançamentos</div><div class="card-sub">Mais recentes</div></div><button class="btn" style="font-size:12px;padding:5px 10px" onclick="showPage('lancamentos')">Ver todos</button></div>
-            <div id="lista-ultimos" class="tx-list"></div>
-          </div>
-        </div>
         <div class="card"><div class="card-header"><div><div class="card-title">Evolução patrimonial</div><div class="card-sub">Últimos 6 meses</div></div></div><div class="chart-wrap"><canvas id="chartPatrimonio"></canvas></div></div>
       </div>
 
       <!-- LANÇAMENTOS -->
       <div id="page-lancamentos" class="page">
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header"><div><div class="card-title">Situação das contas</div><div class="card-sub">Clique num card para filtrar a tabela abaixo — a pagar e a receber</div></div></div>
+          <div id="situacao-lancamentos" class="fp-grid">
+            <div class="fp-card" data-situacao="vencidas" onclick="aplicarFiltroSituacaoRapida('vencidas')" style="cursor:pointer;padding:12px;border:0.5px solid var(--border-light);border-radius:10px;background:var(--card)">
+              <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Vencidas</div>
+              <div style="font-size:16px;font-weight:600;color:#ef4444" id="sit-l-vencidas">R$ 0</div>
+            </div>
+            <div class="fp-card" data-situacao="vencem-hoje" onclick="aplicarFiltroSituacaoRapida('vencem-hoje')" style="cursor:pointer;padding:12px;border:0.5px solid var(--border-light);border-radius:10px;background:var(--card)">
+              <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Vencem hoje</div>
+              <div style="font-size:16px;font-weight:600;color:#d97706" id="sit-l-vencem-hoje">R$ 0</div>
+            </div>
+            <div class="fp-card" data-situacao="a-vencer" onclick="aplicarFiltroSituacaoRapida('a-vencer')" style="cursor:pointer;padding:12px;border:0.5px solid var(--border-light);border-radius:10px;background:var(--card)">
+              <div style="font-size:11px;color:var(--text3);margin-bottom:4px">A vencer</div>
+              <div style="font-size:16px;font-weight:600" id="sit-l-a-vencer">R$ 0</div>
+            </div>
+            <div class="fp-card" data-situacao="pagas" onclick="aplicarFiltroSituacaoRapida('pagas')" style="cursor:pointer;padding:12px;border:0.5px solid var(--border-light);border-radius:10px;background:var(--card)">
+              <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Pagas / Recebidas</div>
+              <div style="font-size:16px;font-weight:600;color:#16a34a" id="sit-l-pagas">R$ 0</div>
+            </div>
+            <div class="fp-card" data-situacao="total" onclick="aplicarFiltroSituacaoRapida('total')" style="cursor:pointer;padding:12px;border:0.5px solid var(--border-light);border-radius:10px;background:var(--bg)">
+              <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Total a pagar/receber</div>
+              <div style="font-size:16px;font-weight:600" id="sit-l-total">R$ 0</div>
+            </div>
+          </div>
+        </div>
         <div class="card">
           <div class="card-header" style="flex-direction:column;align-items:stretch;gap:10px">
             <input type="text" id="busca-global" placeholder="🔍 Buscar por descrição, categoria, tag..." style="width:100%;padding:8px 12px;border-radius:8px;border:0.5px solid var(--border-light);font-size:13px;font-family:inherit" oninput="renderLancamentos()">
             <div class="filters">
               <select id="filtro-status" onchange="renderLancamentos()"><option value="">Todos</option><option value="pendente">Pendentes</option><option value="validado">Validados</option><option value="interno">Internos</option></select>
-              <select id="filtro-situacao" onchange="renderLancamentos()"><option value="">Pagos e em aberto</option><option value="pago">Pagos</option><option value="aberto">Em aberto</option></select>
+              <select id="filtro-situacao" onchange="mudarFiltroSituacaoManual()"><option value="">Pagos e em aberto</option><option value="pago">Pagos</option><option value="aberto">Em aberto</option></select>
               <select id="filtro-tipo" onchange="renderLancamentos()"><option value="">Todos os tipos</option><option value="receita">Receitas</option><option value="despesa">Despesas</option></select>
               <select id="filtro-categoria" onchange="renderLancamentos()"><option value="">Todas as categorias</option></select>
               <input type="text" id="filtro-tag" placeholder="Tag..." style="padding:6px 10px;border-radius:8px;border:0.5px solid var(--border-light);font-size:13px;font-family:inherit;width:80px" oninput="renderLancamentos()">
@@ -308,7 +293,7 @@
 
             <!-- DRE -->
       <div id="page-dre" class="page">
-        <div class="dre-header"><select id="dre-mes" onchange="renderDRE()"></select></div>
+        <div class="dre-header" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><select id="dre-mes" onchange="renderDRE()"></select><span id="dre-regime-sub" style="font-size:12px;color:var(--text3)"></span></div>
         <div class="card"><table class="dre-table" id="dre-table"></table></div>
       </div>
 
@@ -603,6 +588,7 @@
     <div class="modal-body">
       <form class="form-manual" onsubmit="salvarManual(event)">
         <div class="form-row">
+          <div class="form-group"><label>Mês</label><select id="manual-mes-rapido" onchange="aplicarMesRapidoManual()"></select></div>
           <div class="form-group"><label>Data</label><input type="date" id="manual-data" required></div>
           <div class="form-group"><label>Valor (R$)</label><input type="number" id="manual-valor" step="0.01" placeholder="0,00" required></div>
         </div>
