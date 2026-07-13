@@ -78,6 +78,13 @@ let mesAtual = mesLocalISO();
 document.addEventListener('DOMContentLoaded', () => {
   try { carregarDB(); } catch(e) { console.error('carregarDB:', e); }
   try { preencherSelects(); } catch(e) { console.error('preencherSelects:', e); }
+  try {
+    // Período padrão da tabela de Lançamentos: mês atual
+    preencherSeletorPeriodo('ancora');
+    const hoje = new Date();
+    document.getElementById('filtro-data-inicio').value = dataLocalISO(new Date(hoje.getFullYear(), hoje.getMonth(), 1));
+    document.getElementById('filtro-data-fim').value = dataLocalISO(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0));
+  } catch(e) { console.error('seletorPeriodo:', e); }
   try { renderSeletorTags('manual-tags-seletor', []); } catch(e) { console.error('seletorTags:', e); }
   try { renderDashboard(); } catch(e) { console.error('renderDashboard:', e); }
   try { renderLancamentos(); } catch(e) { console.error('renderLancamentos:', e); }
@@ -141,13 +148,17 @@ function carregarDB() {
           { id: 'outros', natureza: 'todas',            nome: 'Outros',                  cor: '#94a3b8', codigo: '9.9', subcats: [] },
         ];
         // Preserva subcats customizadas que o usuário possa ter adicionado
-        DB.categorias = planoNovo.map(nova => {
+        const oficiais = planoNovo.map(nova => {
           const antiga = DB.categorias.find(c => c.id === nova.id);
           if (antiga && antiga.subcats && antiga.subcats.length > nova.subcats.length) {
             return { ...nova, subcats: antiga.subcats };
           }
           return nova;
         });
+        // VACINA: categorias criadas pelo usuário (fora da lista oficial) são PRESERVADAS.
+        // Antes desta correção, a reescrita descartava categorias personalizadas — foi o que apagou "Gastos PJ" (2x).
+        const customizadas = DB.categorias.filter(c => !planoNovo.some(n => n.id === c.id));
+        DB.categorias = [...oficiais, ...customizadas];
         DB.migradoV3 = true;
         salvarDB();
         console.log('Migração v3 — plano de contas atualizado');
@@ -176,8 +187,8 @@ function carregarDB() {
           const idx = catFaculdade.subcats.indexOf('Unicesumar');
           if (idx !== -1) { catFaculdade.subcats[idx] = 'Faculdade'; migrou = true; }
         }
+        DB.migradoV2 = true;
         if (migrou) {
-          DB.migradoV2 = true;
           salvarDB();
           console.log('Migração v2 concluída');
         }
@@ -300,13 +311,7 @@ function showPage(id) {
     const titleEl = document.getElementById('page-title');
     if (titleEl) titleEl.textContent = titles[id] || id;
 
-    // Subtítulo: mês vigente formatado (ex: "Julho 2026") em todos os módulos
-    const subEl = document.getElementById('page-sub');
-    if (subEl) {
-      const [y, m] = mesAtual.split('-').map(Number);
-      const label = new Date(y, m - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-      subEl.textContent = label.charAt(0).toUpperCase() + label.slice(1);
-    }
+    atualizarSubtituloMes();
 
     if (id === 'dashboard') renderDashboard();
     if (id === 'lancamentos') renderLancamentos();
@@ -401,7 +406,17 @@ function navegarMes(dir) {
   renderDashboard();
 }
 
+// Subtítulo do topo: SEMPRE espelha o mês selecionado (mesAtual). Atualiza em troca de página E em troca de mês.
+function atualizarSubtituloMes() {
+  const subEl = document.getElementById('page-sub');
+  if (!subEl) return;
+  const [y, m] = mesAtual.split('-').map(Number);
+  const label = new Date(y, m - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  subEl.textContent = label.charAt(0).toUpperCase() + label.slice(1);
+}
+
 function renderDashboard() {
+  atualizarSubtituloMes();
   preencherSeletorMesDashboard();
   preencherSeletorTagDashboard();
 
@@ -416,13 +431,6 @@ function renderDashboard() {
   const despesas = lancsMes.filter(l => l.tipo === 'despesa' && isPago(l)).reduce((a, b) => a + b.valor, 0);
   const investimentos = lancsMes.filter(l => l.tipo === 'investimento' && isPago(l)).reduce((a, b) => a + b.valor, 0);
 
-  const d = new Date(mesAtual + '-01');
-  d.setMonth(d.getMonth() - 1);
-  const mesAnt = mesLocalISO(d);
-  const laMes = filtraTag(getMes(mesAnt));
-  const recAnt = laMes.filter(l => l.tipo === 'receita' && isPago(l)).reduce((a, b) => a + b.valor, 0);
-  const despAnt = laMes.filter(l => l.tipo === 'despesa' && isPago(l)).reduce((a, b) => a + b.valor, 0);
-  const invAnt = laMes.filter(l => l.tipo === 'investimento' && isPago(l)).reduce((a, b) => a + b.valor, 0);
 
   document.getElementById('m-receitas').textContent = fmt(receitas);
   document.getElementById('m-despesas').textContent = fmt(despesas);
@@ -443,9 +451,6 @@ function renderDashboard() {
     el.className = 'metric-delta ' + (up ? 'delta-up' : 'delta-down');
     el.textContent = (up ? '↑' : '↓') + ' ' + Math.abs(pct) + '% vs mês anterior';
   };
-  setDelta('d-receitas', receitas, recAnt);
-  setDelta('d-despesas', despesas, despAnt);
-  setDelta('d-investimentos', investimentos, invAnt);
   setDelta('d-patrimonio', pat, patAnt);
 
   // lancsMes já vem filtrado pela tag (filtro global)
@@ -698,6 +703,7 @@ function calcularSituacaoLancamentos() {
   const tipo = document.getElementById('filtro-tipo')?.value || '';
   const cat = document.getElementById('filtro-categoria')?.value || '';
   const tag = document.getElementById('filtro-tag')?.value || '';
+  const forma = document.getElementById('filtro-forma-pagamento')?.value || '';
   const busca = (document.getElementById('busca-global')?.value || '').trim().toLowerCase();
   const dataIni = document.getElementById('filtro-data-inicio')?.value || '';
   const dataFim = document.getElementById('filtro-data-fim')?.value || '';
@@ -707,6 +713,7 @@ function calcularSituacaoLancamentos() {
   if (tipo === 'receita' || tipo === 'despesa') base = base.filter(l => l.tipo === tipo);
   if (cat) base = base.filter(l => l.categoria === cat);
   if (tag) base = base.filter(l => (l.tags || []).includes(tag));
+  if (forma) base = base.filter(l => l.formaPagamento === forma);
   if (busca) base = base.filter(l =>
     l.descricao.toLowerCase().includes(busca) ||
     getNomeCat(l.categoria).toLowerCase().includes(busca) ||
@@ -717,11 +724,21 @@ function calcularSituacaoLancamentos() {
   if (dataFim) base = base.filter(l => l.data <= dataFim);
 
   const hojeISO = dataLocalISO();
-  const vencidas = base.filter(l => (l.situacao || 'pago') === 'aberto' && l.data < hojeISO).reduce((a, b) => a + b.valor, 0);
-  const vencemHoje = base.filter(l => (l.situacao || 'pago') === 'aberto' && l.data === hojeISO).reduce((a, b) => a + b.valor, 0);
-  const aVencer = base.filter(l => (l.situacao || 'pago') === 'aberto' && l.data > hojeISO).reduce((a, b) => a + b.valor, 0);
-  const pagas = base.filter(l => (l.situacao || 'pago') === 'pago').reduce((a, b) => a + b.valor, 0);
-  return { vencidas, vencemHoje, aVencer, pagas, total: vencidas + vencemHoje + aVencer + pagas };
+  const soma = (arr, t) => arr.filter(l => l.tipo === t).reduce((a, b) => a + b.valor, 0);
+  const buckets = {
+    vencidas: base.filter(l => (l.situacao || 'pago') === 'aberto' && l.data < hojeISO),
+    vencemHoje: base.filter(l => (l.situacao || 'pago') === 'aberto' && l.data === hojeISO),
+    aVencer: base.filter(l => (l.situacao || 'pago') === 'aberto' && l.data > hojeISO),
+    pagas: base.filter(l => (l.situacao || 'pago') === 'pago'),
+  };
+  const r = {};
+  Object.entries(buckets).forEach(([k, arr]) => {
+    r[k] = { pagar: soma(arr, 'despesa'), receber: soma(arr, 'receita') };
+  });
+  // Saldo em aberto = a receber − a pagar de tudo que ainda não liquidou
+  r.saldoAberto = (r.vencidas.receber + r.vencemHoje.receber + r.aVencer.receber)
+                - (r.vencidas.pagar + r.vencemHoje.pagar + r.aVencer.pagar);
+  return r;
 }
 
 function renderSituacaoLancamentos() {
@@ -729,13 +746,21 @@ function renderSituacaoLancamentos() {
   if (!wrap) return;
   const s = calcularSituacaoLancamentos();
   const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = fmt(v); };
-  setTxt('sit-l-vencidas', s.vencidas);
-  setTxt('sit-l-vencem-hoje', s.vencemHoje);
-  setTxt('sit-l-a-vencer', s.aVencer);
-  setTxt('sit-l-pagas', s.pagas);
-  setTxt('sit-l-total', s.total);
-  document.querySelectorAll('#situacao-lancamentos .fp-card').forEach(c => {
-    c.classList.toggle('fp-card-active', c.dataset.situacao === filtroSituacaoRapida);
+  setTxt('sit-l-vencidas-p', s.vencidas.pagar);
+  setTxt('sit-l-vencidas-r', s.vencidas.receber);
+  setTxt('sit-l-vencem-hoje-p', s.vencemHoje.pagar);
+  setTxt('sit-l-vencem-hoje-r', s.vencemHoje.receber);
+  setTxt('sit-l-a-vencer-p', s.aVencer.pagar);
+  setTxt('sit-l-a-vencer-r', s.aVencer.receber);
+  setTxt('sit-l-pagas-p', s.pagas.pagar);
+  setTxt('sit-l-pagas-r', s.pagas.receber);
+  const saldoEl = document.getElementById('sit-l-saldo');
+  if (saldoEl) {
+    saldoEl.textContent = (s.saldoAberto < 0 ? '- ' : '') + fmt(Math.abs(s.saldoAberto));
+    saldoEl.style.color = s.saldoAberto < 0 ? '#dc2626' : '#16a34a';
+  }
+  document.querySelectorAll('#situacao-lancamentos .sit-cell').forEach(cel => {
+    cel.classList.toggle('sit-cell-active', cel.dataset.situacao === filtroSituacaoRapida);
   });
 }
 
@@ -784,30 +809,85 @@ function ordenarPor(col) {
   renderLancamentos();
 }
 
+// ===== Navegador de período (estilo Conta Azul): dropdown com rápidos + setas que andam mês a mês =====
+let periodoAncora = mesLocalISO(); // mês âncora das setas ‹ ›
+
+function preencherSeletorPeriodo(selecionado) {
+  const sel = document.getElementById('filtro-periodo-rapido');
+  if (!sel) return;
+  const [y, m] = periodoAncora.split('-').map(Number);
+  const nomeAncora = new Date(y, m - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  const labelAncora = nomeAncora.charAt(0).toUpperCase() + nomeAncora.slice(1);
+  const ops = [
+    ['ancora', labelAncora],
+    ['hoje', 'Hoje'],
+    ['esta_semana', 'Esta semana'],
+    ['mes_atual', 'Mês atual'],
+    ['mes_anterior', 'Mês anterior'],
+    ['mes_seguinte', 'Mês seguinte'],
+    ['ultimos_3', 'Últimos 3 meses'],
+    ['ano_atual', 'Ano atual'],
+    ['todo', 'Todo o período'],
+  ];
+  sel.innerHTML = ops.map(([v, l]) => '<option value="' + v + '"' + (v === (selecionado || 'ancora') ? ' selected' : '') + '>' + l + '</option>').join('');
+}
+
 function aplicarFiltroRapido(tipo) {
   const hoje = new Date();
-  const y = hoje.getFullYear(), m = hoje.getMonth();
+  const y = hoje.getFullYear(), m = hoje.getMonth(), dia = hoje.getDate();
   const fmt = d => dataLocalISO(d);
   let ini = '', fim = '';
-  if (tipo === 'mes_atual') { ini = fmt(new Date(y, m, 1)); fim = fmt(new Date(y, m + 1, 0)); }
-  else if (tipo === 'mes_anterior') { ini = fmt(new Date(y, m - 1, 1)); fim = fmt(new Date(y, m, 0)); }
-  else if (tipo === 'mes_seguinte') { ini = fmt(new Date(y, m + 1, 1)); fim = fmt(new Date(y, m + 2, 0)); }
+  if (tipo === 'ancora') {
+    const [ay, am] = periodoAncora.split('-').map(Number);
+    ini = fmt(new Date(ay, am - 1, 1)); fim = fmt(new Date(ay, am, 0));
+  }
+  else if (tipo === 'hoje') { ini = fmt(hoje); fim = fmt(hoje); }
+  else if (tipo === 'esta_semana') {
+    const dow = hoje.getDay(); // 0=domingo
+    ini = fmt(new Date(y, m, dia - dow)); fim = fmt(new Date(y, m, dia - dow + 6));
+  }
+  else if (tipo === 'mes_atual') { periodoAncora = mesLocalISO(); ini = fmt(new Date(y, m, 1)); fim = fmt(new Date(y, m + 1, 0)); }
+  else if (tipo === 'mes_anterior') { periodoAncora = mesLocalISO(new Date(y, m - 1, 1)); ini = fmt(new Date(y, m - 1, 1)); fim = fmt(new Date(y, m, 0)); }
+  else if (tipo === 'mes_seguinte') { periodoAncora = mesLocalISO(new Date(y, m + 1, 1)); ini = fmt(new Date(y, m + 1, 1)); fim = fmt(new Date(y, m + 2, 0)); }
   else if (tipo === 'ultimos_3') { ini = fmt(new Date(y, m - 2, 1)); fim = fmt(new Date(y, m + 1, 0)); }
   else if (tipo === 'ano_atual') { ini = y + '-01-01'; fim = y + '-12-31'; }
+  else if (tipo === 'todo') { ini = ''; fim = ''; }
   document.getElementById('filtro-data-inicio').value = ini;
   document.getElementById('filtro-data-fim').value = fim;
-  // Destaca o botão ativo
-  document.querySelectorAll('.filtro-rapido').forEach(b => b.classList.remove('btn-dark'));
-  const btn = document.getElementById('fr-' + tipo);
-  if (btn) btn.classList.add('btn-dark');
+  // Meses "com nome" sincronizam a âncora e mostram o nome do mês no botão central
+  if (tipo === 'mes_atual' || tipo === 'mes_anterior' || tipo === 'mes_seguinte') preencherSeletorPeriodo('ancora');
+  else preencherSeletorPeriodo(tipo);
+  renderLancamentos();
+}
+
+function navegarPeriodo(dir) {
+  const [y, m] = periodoAncora.split('-').map(Number);
+  periodoAncora = mesLocalISO(new Date(y, m - 1 + dir, 1));
+  preencherSeletorPeriodo('ancora');
+  aplicarFiltroRapido('ancora');
+}
+
+// Datas manuais digitadas: dropdown perde o rótulo de período pré-definido
+function periodoManualAlterado() {
+  preencherSeletorPeriodo('todo');
+  const sel = document.getElementById('filtro-periodo-rapido');
+  if (sel) sel.value = 'todo';
   renderLancamentos();
 }
 
 function limparFiltroRapido() {
   document.getElementById('filtro-data-inicio').value = '';
   document.getElementById('filtro-data-fim').value = '';
-  document.querySelectorAll('.filtro-rapido').forEach(b => b.classList.remove('btn-dark'));
+  preencherSeletorPeriodo('todo');
   renderLancamentos();
+}
+
+function toggleMaisFiltros() {
+  const el = document.getElementById('mais-filtros');
+  const btn = document.getElementById('btn-mais-filtros');
+  const aberto = el.style.display === 'flex';
+  el.style.display = aberto ? 'none' : 'flex';
+  if (btn) btn.classList.toggle('btn-dark', !aberto);
 }
 
 function renderLancamentos() {
@@ -827,6 +907,17 @@ function renderLancamentos() {
     if (lancSortCol === 'data') { va = a.data; vb = b.data; }
     else if (lancSortCol === 'descricao') { va = a.descricao.toLowerCase(); vb = b.descricao.toLowerCase(); }
     else if (lancSortCol === 'categoria') { va = getNomeCat(a.categoria).toLowerCase(); vb = getNomeCat(b.categoria).toLowerCase(); }
+    else if (lancSortCol === 'tipo') {
+      // Ordem financeira fixa (não alfabética): Receita → Despesa → Investimento → Interno
+      const ordemTipo = { receita: 0, despesa: 1, investimento: 2, interno: 3 };
+      va = ordemTipo[a.tipo] ?? 9; vb = ordemTipo[b.tipo] ?? 9;
+    }
+    else if (lancSortCol === 'situacao') {
+      // Abertos primeiro (o que exige ação), depois pagos; dentro do grupo, por data
+      const ordemSit = { aberto: 0, pago: 1 };
+      va = (ordemSit[a.situacao || 'pago']) + '_' + a.data;
+      vb = (ordemSit[b.situacao || 'pago']) + '_' + b.data;
+    }
     else if (lancSortCol === 'valor') { return (a.valor - b.valor) * lancSortDir; }
     else { va = a.data; vb = b.data; }
     return va < vb ? -lancSortDir : va > vb ? lancSortDir : 0;
@@ -848,6 +939,9 @@ function renderLancamentos() {
   if (dataFim) lista = lista.filter(l => l.data <= dataFim);
   const situacaoFiltro = document.getElementById('filtro-situacao')?.value || '';
   if (situacaoFiltro) lista = lista.filter(l => (l.situacao || 'pago') === situacaoFiltro);
+
+  const formaFiltro = document.getElementById('filtro-forma-pagamento')?.value || '';
+  if (formaFiltro) lista = lista.filter(l => l.formaPagamento === formaFiltro);
 
   const hojeISO = dataLocalISO();
   if (filtroSituacaoRapida === 'vencidas') lista = lista.filter(l => (l.situacao||'pago')==='aberto' && l.data < hojeISO);
@@ -874,10 +968,11 @@ function renderLancamentos() {
   DB.formasPagamento.forEach(f => { nomesFormaPgto[f.id] = f.nome; });
   lista.forEach(l => {
     const isInterno = l.tipo === 'interno';
+    // Só etiqueta de exceção: "revisar" (pendente) ou "interno". Validado é a regra — não polui a tabela.
     const badge = l.status === 'pendente'
       ? '<span class="tx-badge badge-pendente">revisar</span>'
       : isInterno ? '<span class="tx-badge badge-interno">interno</span>'
-      : '<span class="tx-badge badge-validado">validado</span>';
+      : '';
     const emAberto = (l.situacao || 'pago') === 'aberto';
     const badgeSituacao = emAberto
       ? '<span class="tx-badge" style="background:#fef9c3;color:#a16207">○ Em aberto</span>'
@@ -1031,6 +1126,17 @@ function abrirEditar(id) {
   renderSeletorTags('editar-tags-seletor', l.tags || []);
   document.getElementById('editar-forma-pagamento').value = l.formaPagamento || '';
   document.getElementById('editar-situacao').value = l.situacao || 'pago';
+
+  // BLOQUEIO PARCIAL (Opção A): pago tem os FATOS financeiros travados (data, valor, tipo, situação).
+  // Classificação (descrição, categoria, subcategoria, forma, tags) continua livre. Para alterar fatos: Reabrir.
+  const pago = (l.situacao || 'pago') === 'pago';
+  ['editar-data', 'editar-valor', 'editar-tipo', 'editar-situacao'].forEach(fid => {
+    const el = document.getElementById(fid);
+    if (el) { el.disabled = pago; el.style.opacity = pago ? '0.55' : ''; }
+  });
+  const avisoPago = document.getElementById('editar-aviso-pago');
+  if (avisoPago) avisoPago.style.display = pago ? 'block' : 'none';
+
   // Escopo de grupo (repetição/parcelamento)
   const escopoDiv = document.getElementById('editar-escopo-grupo');
   if (escopoDiv) {
@@ -1064,15 +1170,20 @@ function salvarEdicao() {
   const l = DB.lancamentos.find(l => l.id === id);
   if (!l) return;
   const catAntiga = l.categoria;
-  l.data = document.getElementById('editar-data').value;
+  const pago = (l.situacao || 'pago') === 'pago';
+  // Fatos financeiros só mudam em lançamento aberto (pago = travado; use Reabrir)
+  if (!pago) {
+    l.data = document.getElementById('editar-data').value;
+    l.valor = parseFloat(document.getElementById('editar-valor').value);
+    l.tipo = document.getElementById('editar-tipo').value;
+    l.situacao = document.getElementById('editar-situacao').value;
+  }
+  // Classificação sempre editável
   l.descricao = document.getElementById('editar-descricao').value;
-  l.valor = parseFloat(document.getElementById('editar-valor').value);
-  l.tipo = document.getElementById('editar-tipo').value;
   l.categoria = document.getElementById('editar-categoria').value;
   l.subcategoria = document.getElementById('editar-subcategoria').value;
   l.tags = getTagsSelecionadas('editar-tags-seletor');
   l.formaPagamento = document.getElementById('editar-forma-pagamento').value;
-  l.situacao = document.getElementById('editar-situacao').value;
   l.status = 'validado';
 
   // Propagação para o grupo (repetição/parcelamento)
@@ -2747,6 +2858,12 @@ function preencherSelectsFormaPagamento() {
     el.innerHTML = '<option value="">—</option>' +
       DB.formasPagamento.map(f => '<option value="' + f.id + '"' + (f.id === valorAtual ? ' selected' : '') + '>' + f.nome + '</option>').join('');
   });
+  const filtroForma = document.getElementById('filtro-forma-pagamento');
+  if (filtroForma) {
+    const valorAtual = filtroForma.value;
+    filtroForma.innerHTML = '<option value="">Todas as contas</option>' +
+      DB.formasPagamento.map(f => '<option value="' + f.id + '"' + (f.id === valorAtual ? ' selected' : '') + '>' + esc(f.nome) + '</option>').join('');
+  }
   const loteEl = document.getElementById('lote-forma-pagamento');
   if (loteEl) {
     const valorAtual = loteEl.value;
@@ -2907,40 +3024,11 @@ function limparDados() {
   toast('Dados limpos');
 }
 
-function preencherMesRapidoManual() {
-  const sel = document.getElementById('manual-mes-rapido');
-  if (!sel) return;
-  const hoje = new Date();
-  const opcoes = [];
-  for (let i = 0; i <= 12; i++) {
-    const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
-    const valor = mesLocalISO(d);
-    let label;
-    if (i === 0) label = 'Mês atual';
-    else if (i === 1) label = 'Mês anterior';
-    else {
-      const nome = d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-      label = nome.charAt(0).toUpperCase() + nome.slice(1);
-    }
-    opcoes.push('<option value="' + valor + '"' + (i === 0 ? ' selected' : '') + '>' + label + '</option>');
-  }
-  sel.innerHTML = opcoes.join('');
-}
 
-function aplicarMesRapidoManual() {
-  const mesEscolhido = document.getElementById('manual-mes-rapido').value; // 'YYYY-MM'
-  const dataAtual = document.getElementById('manual-data').value; // 'YYYY-MM-DD'
-  const diaAtual = dataAtual ? parseInt(dataAtual.slice(8, 10)) : new Date().getDate();
-  const [ano, mes] = mesEscolhido.split('-').map(Number);
-  const ultimoDiaDoMes = new Date(ano, mes, 0).getDate();
-  const dia = Math.min(diaAtual, ultimoDiaDoMes);
-  document.getElementById('manual-data').value = mesEscolhido + '-' + String(dia).padStart(2, '0');
-}
 
 function abrirModalLancamento() {
   // Pré-preenche data de hoje (mês atual) e prepara selects
   document.getElementById('manual-data').value = dataLocalISO();
-  preencherMesRapidoManual();
   const tipoAtual = document.getElementById('manual-tipo').value || 'despesa';
   preencherSelectCategoriaPorTipo('manual-categoria', tipoAtual, '');
   atualizarSubcatManual();
