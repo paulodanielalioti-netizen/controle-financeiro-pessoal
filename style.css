@@ -310,6 +310,37 @@ body {
   gap: 10px;
 }
 
+/* Faixa de situação das contas (Lançamentos) — células unidas estilo Conta Azul */
+.sit-strip {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  border: 0.5px solid var(--border-light);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.sit-cell {
+  padding: 10px 14px;
+  cursor: pointer;
+  border-right: 0.5px solid var(--border-light);
+  transition: background 0.12s ease;
+  text-align: center;
+}
+.sit-cell:last-child { border-right: none; }
+.sit-cell:hover { background: var(--bg); }
+.sit-cell-active { box-shadow: inset 0 -3px 0 var(--dark); background: var(--bg); }
+.sit-cell-saldo { background: var(--bg); }
+.sit-label { font-size: 11px; color: var(--text3); margin-bottom: 4px; font-weight: 500; }
+.sit-val { display: flex; flex-direction: column; gap: 1px; align-items: center; }
+.sit-pagar { font-size: 12px; font-weight: 600; color: #dc2626; }
+.sit-pagar::before { content: '↓ '; font-weight: 400; }
+.sit-receber { font-size: 12px; font-weight: 600; color: #16a34a; }
+.sit-receber::before { content: '↑ '; font-weight: 400; }
+@media (max-width: 900px) {
+  .sit-strip { grid-template-columns: repeat(2, 1fr); }
+  .sit-cell { border-bottom: 0.5px solid var(--border-light); }
+}
+
 .import-area {
   border: 1.5px dashed var(--border-light);
   border-radius: 12px;
