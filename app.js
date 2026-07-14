@@ -68,6 +68,8 @@ let chartCategorias = null;
 function pad2(n) { return String(n).padStart(2, '0'); }
 function dataLocalISO(d) { d = d || new Date(); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
 function mesLocalISO(d) { return dataLocalISO(d).slice(0, 7); }
+// Constrói Date LOCAL a partir de 'YYYY-MM' (new Date('YYYY-MM-01') é UTC e regride um dia no Brasil)
+function dateDoMes(mesStr) { const [y, m] = mesStr.split('-').map(Number); return new Date(y, m - 1, 1); }
 
 // Escape de HTML — todo texto vindo do usuário/extrato passa por aqui antes de entrar em innerHTML
 function esc(s) {
@@ -120,6 +122,11 @@ function carregarDB() {
       DB.previstos = parsed.previstos || [];
       DB.formasPagamento = (parsed.formasPagamento && parsed.formasPagamento.length) ? parsed.formasPagamento : DB.formasPagamento;
       DB.config = { ...DB.config, ...(parsed.config || {}) };
+      // Patrimônio (modelo novo) — sem estas linhas, os valores morriam a cada recarregamento
+      DB.patrimonioCategorias = (parsed.patrimonioCategorias && parsed.patrimonioCategorias.length) ? parsed.patrimonioCategorias : DB.patrimonioCategorias;
+      DB.patrimonioValores = parsed.patrimonioValores || [];
+      // Flags de migração — sem isto, TODAS as migrações re-executavam a cada carregamento
+      Object.keys(parsed).forEach(k => { if (k.startsWith('migrado')) DB[k] = parsed[k]; });
       if (parsed.categorias && parsed.categorias.length) {
         DB.categorias = parsed.categorias.map(pc => {
           const def = DB.categorias.find(d => d.id === pc.id);
@@ -308,6 +315,13 @@ function carregarDB() {
       }
     } catch(e) { console.error('Erro ao carregar DB', e); }
   }
+  // Base recém-criada (sem dados salvos) já nasce com o seed atual — nenhuma migração é necessária.
+  // Marcar as flags evita que a primeira gravação persista "sem histórico" e a carga seguinte re-rode tudo.
+  if (!saved) {
+    ['V2','V3','V4','V5','V6','V7','V8','V9'].forEach(v => { DB['migrado' + v] = true; });
+    salvarDB();
+  }
+
 }
 
 // ========================
@@ -536,9 +550,10 @@ function renderDashboard() {
       const selo = orc > 0 && f.val >= orc
         ? '<span style="color:#dc2626;font-size:10px;background:#fee2e2;padding:1px 7px;border-radius:8px;white-space:nowrap">' + Math.round((f.val / orc) * 100) + '% do orçamento</span>'
         : '';
-      return '<div style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer" onclick="abrirDetalheCategoriaDash(\'' + f.id + '\',\'' + catTipo + '\')">' +
+      return '<div class="rosca-linha" onclick="abrirDetalheCategoriaDash(\'' + f.id + '\',\'' + catTipo + '\')">' +
         '<span style="width:9px;height:9px;border-radius:2px;background:' + f.cor + ';flex-shrink:0"></span>' +
-        '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(f.nome) + '</span>' +
+        '<span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px">' + esc(f.nome) + '</span>' +
+        '<span class="rosca-leader"></span>' +
         selo +
         '<span style="font-weight:600;white-space:nowrap">' + fmt(f.val) + '</span>' +
         '<span style="color:var(--text3);font-size:11px;width:32px;text-align:right">' + pct + '%</span>' +
@@ -546,15 +561,15 @@ function renderDashboard() {
     }).join('');
 
     listaCats.innerHTML =
-      '<div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap">' +
-        '<div style="position:relative;width:180px;height:180px;flex-shrink:0">' +
-          '<svg viewBox="0 0 42 42" style="width:180px;height:180px;transform:rotate(-90deg)">' + circulos + '</svg>' +
+      '<div class="rosca-wrap">' +
+        '<div style="position:relative;width:210px;height:210px;flex-shrink:0">' +
+          '<svg viewBox="0 0 42 42" style="width:210px;height:210px;transform:rotate(-90deg)">' + circulos + '</svg>' +
           '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none">' +
             '<span style="font-size:11px;color:var(--text3)">Total</span>' +
-            '<span style="font-size:17px;font-weight:600">' + fmt(totalCat) + '</span>' +
+            '<span style="font-size:18px;font-weight:600">' + fmt(totalCat) + '</span>' +
           '</div>' +
         '</div>' +
-        '<div style="flex:1;min-width:230px;display:flex;flex-direction:column;gap:7px">' + legenda + '</div>' +
+        '<div class="rosca-legenda">' + legenda + '</div>' +
       '</div>';
   }
   // Subtítulo do card acompanha o tipo
@@ -607,7 +622,7 @@ function renderGraficoMensal() {
 
   // Monta lista de meses (do mais antigo ao atual)
   const meses = [];
-  const base = new Date(mesAtual + '-01');
+  const base = dateDoMes(mesAtual); // local, não UTC — julho aparece como julho
   for (let i = nMeses - 1; i >= 0; i--) {
     const d = new Date(base.getFullYear(), base.getMonth() - i, 1);
     meses.push(mesLocalISO(d));
@@ -764,7 +779,7 @@ function calcularSituacaoLancamentos() {
 
   let base = DB.lancamentos.filter(l => l.tipo === 'despesa' || l.tipo === 'receita');
   if (status) base = base.filter(l => l.status === status || (status === 'interno' && l.tipo === 'interno'));
-  if (tipo === 'receita' || tipo === 'despesa') base = base.filter(l => l.tipo === tipo);
+  if (tipo) base = base.filter(l => l.tipo === tipo);
   if (cat) base = base.filter(l => l.categoria === cat);
   if (tag) base = base.filter(l => (l.tags || []).includes(tag));
   if (forma) base = base.filter(l => l.formaPagamento === forma);
@@ -819,6 +834,8 @@ function renderSituacaoLancamentos() {
 }
 
 function aplicarFiltroSituacaoRapida(situacao) {
+  // "Saldo em aberto" (total) funciona como limpar: nenhum filtro de situação
+  if (situacao === 'total') situacao = '';
   filtroSituacaoRapida = (filtroSituacaoRapida === situacao) ? '' : situacao;
   const selSituacao = document.getElementById('filtro-situacao');
   if (selSituacao) {
@@ -930,12 +947,6 @@ function periodoManualAlterado() {
   renderLancamentos();
 }
 
-function limparFiltroRapido() {
-  document.getElementById('filtro-data-inicio').value = '';
-  document.getElementById('filtro-data-fim').value = '';
-  preencherSeletorPeriodo('todo');
-  renderLancamentos();
-}
 
 function toggleMaisFiltros() {
   const el = document.getElementById('mais-filtros');
@@ -2547,15 +2558,18 @@ function renderExecucaoMes(lancsFiltrados) {
   const wrap = document.getElementById('execucao-mes');
   if (!wrap) return;
   const linhas = [
-    { tipo: 'receita', nome: 'Receitas', cor: '#16a34a', verboTotal: 'lançado', verboPago: 'recebido' },
-    { tipo: 'despesa', nome: 'Despesas', cor: '#d97706', verboTotal: 'lançado', verboPago: 'pago' },
+    { tipo: 'receita', nome: 'Receitas', cor: '#16a34a', verboPago: 'recebido' },
+    { tipo: 'despesa', nome: 'Despesas', cor: '#d97706', verboPago: 'pago' },
+    // Investimentos só aparecem quando houver aporte lançado no mês (sem aporte, sem ruído)
+    { tipo: 'investimento', nome: 'Investimentos', cor: '#2563eb', verboPago: 'aportado', condicional: true },
   ];
   let html = '';
   let temAlgo = false;
-  linhas.forEach(({ tipo, nome, cor, verboPago }) => {
+  linhas.forEach(({ tipo, nome, cor, verboPago, condicional }) => {
     const doTipo = lancsFiltrados.filter(l => l.tipo === tipo);
     const total = doTipo.reduce((a, b) => a + b.valor, 0);
     const pago = doTipo.filter(l => (l.situacao || 'pago') === 'pago').reduce((a, b) => a + b.valor, 0);
+    if (condicional && total === 0) return; // barra condicional some sem dados
     if (total > 0) temAlgo = true;
     const pct = total > 0 ? Math.round((pago / total) * 100) : 0;
     html += '<div class="exec-row">' +
@@ -2873,10 +2887,48 @@ function renderPatrimonio() {
     }
   }
 
+  renderHistoricoPatrimonio();
   renderEvolucaoPatrimonio();
 }
 
 // Gráfico de evolução: barras empilhadas por categoria; meses só-legado em barra única cinza
+function renderHistoricoPatrimonio() {
+  const el = document.getElementById('pat-historico');
+  if (!el) return;
+  const meses = getMesesComPatrimonio().sort().reverse();
+  if (!meses.length) {
+    el.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:10px 0;text-align:center">Nenhum registro ainda</div>';
+    return;
+  }
+  el.innerHTML = meses.map(m => {
+    const porCat = DB.patrimonioValores.some(v => v.mes === m);
+    const total = getTotalPatrimonioMes(m) || 0;
+    const [y, mo] = m.split('-').map(Number);
+    const nome = new Date(y, mo - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    const tipoTag = porCat
+      ? ''
+      : '<span style="font-size:10px;background:var(--bg);border:0.5px solid var(--border-light);border-radius:8px;padding:1px 7px;color:var(--text3)">registro antigo</span>';
+    return '<div style="display:flex;align-items:center;gap:10px;padding:7px 4px;border-bottom:0.5px solid var(--border-light2)">' +
+      '<span style="font-size:13px;min-width:150px;text-transform:capitalize">' + nome + '</span>' + tipoTag +
+      '<span style="flex:1"></span>' +
+      '<span style="font-size:13px;font-weight:600">' + fmt(total) + '</span>' +
+      '<button class="btn" style="font-size:11px;padding:3px 9px" title="' + (porCat ? 'Editar valores deste mês' : 'Converter para valores por categoria') + '" onclick="abrirAtualizarValores(\'' + m + '\')"><i class="ti ti-pencil"></i></button>' +
+      '<button class="btn" style="font-size:11px;padding:3px 9px;color:#dc2626;border-color:#fecaca" title="Apagar este mês" onclick="apagarMesPatrimonio(\'' + m + '\')"><i class="ti ti-trash"></i></button>' +
+    '</div>';
+  }).join('');
+}
+
+function apagarMesPatrimonio(mes) {
+  const total = getTotalPatrimonioMes(mes) || 0;
+  if (!confirm('Apagar o registro de ' + mes + ' (' + fmt(total) + ')?\n\nIsso remove o mês do histórico e dos gráficos.')) return;
+  DB.patrimonioValores = DB.patrimonioValores.filter(v => v.mes !== mes);
+  DB.patrimonio = DB.patrimonio.filter(p => p.mes !== mes);
+  salvarDB();
+  renderPatrimonio();
+  try { renderChartPatrimonio(); } catch(ex) {}
+  toast('Registro de ' + mes + ' apagado');
+}
+
 function renderEvolucaoPatrimonio() {
   const el = document.getElementById('pat-evolucao');
   if (!el) return;
@@ -2933,8 +2985,11 @@ function renderEvolucaoPatrimonio() {
 }
 
 // ---- Atualização mensal (a "foto", agora com nome civil) ----
-function abrirAtualizarValores() {
-  const mesRef = mesLocalISO();
+let patModalMes = null; // mês-alvo do modal (null = mês corrente)
+
+function abrirAtualizarValores(mesAlvo) {
+  const mesRef = mesAlvo || mesLocalISO();
+  patModalMes = mesRef;
   const [y, m] = mesRef.split('-').map(Number);
   const nome = new Date(y, m - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
   document.getElementById('pat-modal-sub').innerHTML = 'Valores de <b>' + nome + '</b> · pré-preenchidos com o último registro, ajuste só o que mudou';
@@ -2951,7 +3006,7 @@ function abrirAtualizarValores() {
 
 function salvarValoresPatrimonio(e) {
   e.preventDefault();
-  const mesRef = mesLocalISO();
+  const mesRef = patModalMes || mesLocalISO();
   document.querySelectorAll('.pat-valor-input').forEach(inp => {
     const catId = inp.dataset.catid;
     const valor = parseFloat(inp.value);
@@ -2960,6 +3015,8 @@ function salvarValoresPatrimonio(e) {
     if (idx >= 0) DB.patrimonioValores[idx].valor = valor;
     else DB.patrimonioValores.push({ mes: mesRef, catId, valor });
   });
+  // Registro por categoria substitui o total único antigo do mesmo mês (conversão)
+  DB.patrimonio = DB.patrimonio.filter(p => p.mes !== mesRef);
   salvarDB();
   fecharModal('modal-pat-valores');
   renderPatrimonio();
@@ -3060,8 +3117,9 @@ function darBaixaLancamento(id) {
   document.getElementById('baixa-id').value = l.id;
   document.getElementById('baixa-descricao').textContent = l.descricao;
   document.getElementById('baixa-info').textContent = getNomeCat(l.categoria) + (l.subcategoria ? ' › ' + l.subcategoria : '') + ' · vencimento ' + formatarData(l.data);
-  // Data sugerida: hoje (data real do pagamento)
-  document.getElementById('baixa-data').value = dataLocalISO();
+  // Data sugerida: a data REGISTRADA do lançamento (regime de competência do Paulo).
+  // Só mude se o pagamento real aconteceu em dia diferente.
+  document.getElementById('baixa-data').value = l.data;
   document.getElementById('baixa-valor').value = l.valor;
   document.getElementById('baixa-forma-pagamento').value = l.formaPagamento || '';
   document.getElementById('modal-baixa').style.display = 'flex';
