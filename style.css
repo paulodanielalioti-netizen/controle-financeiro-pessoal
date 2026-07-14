@@ -532,7 +532,7 @@ select {
 select:focus { border-color: var(--dark); }
 select:disabled { opacity: 0.55; cursor: not-allowed; }
 
-/* ===== ITEM 2: refinamentos estéticos do dashboard ===== *
+/* ===== ITEM 2: refinamentos estéticos do dashboard ===== */
 /* Mini-cards internos sem borda — fundo suave separa sem ruído de linhas */
 .fp-card { border: none !important; background: var(--bg) !important; }
 .sit-cell .sit-label, .fp-card > div:first-child { text-transform: uppercase; letter-spacing: 0.4px; font-size: 10px; }
@@ -548,3 +548,10 @@ select:disabled { opacity: 0.55; cursor: not-allowed; }
 .exec-info { color: var(--text3); }
 .exec-track { height: 10px; background: var(--border-light2, #e2e8f0); border-radius: 6px; overflow: hidden; }
 .exec-fill { height: 100%; border-radius: 6px; transition: width 0.4s ease; }
+
+
+/* ===== Rosca: legenda compacta com pontilhado-guia ===== */
+.rosca-wrap { display:flex; gap:28px; align-items:center; flex-wrap:wrap; }
+.rosca-legenda { display:flex; flex-direction:column; gap:7px; min-width:230px; max-width:460px; flex:1; }
+.rosca-linha { display:flex; align-items:center; gap:8px; font-size:13px; cursor:pointer; }
+.rosca-leader { flex:1; border-bottom: 1.5px dotted var(--border-light); margin: 0 2px; min-width: 14px; transform: translateY(3px); }
