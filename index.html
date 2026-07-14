@@ -79,34 +79,45 @@
           <button class="btn" style="font-size:12px;padding:5px 12px;background:#a16207;border-color:#a16207;color:#fff" onclick="exportarDados()"><i class="ti ti-database-export"></i> Fazer backup agora</button>
         </div>
         <div class="metrics" style="grid-template-columns:repeat(3,1fr)">
-          <div class="metric-card"><div class="metric-label"><i class="ti ti-arrow-down-circle"></i> Receitas</div><div class="metric-value" style="font-size:22px" id="m-receitas">R$ 0</div></div>
-          <div class="metric-card"><div class="metric-label"><i class="ti ti-arrow-up-circle"></i> Despesas</div><div class="metric-value" style="font-size:22px" id="m-despesas">R$ 0</div></div>
-          <div class="metric-card"><div class="metric-label"><i class="ti ti-trending-up"></i> Investimentos</div><div class="metric-value" style="font-size:22px" id="m-investimentos">R$ 0</div></div>
+          <div class="metric-card"><div class="metric-label"><i class="ti ti-arrow-down-circle"></i> Receitas</div><div class="metric-value" style="font-size:22px" id="m-receitas">R$ 0</div><div style="font-size:10px;color:var(--text3);opacity:.7;margin-top:2px">recebido no mês · caixa</div></div>
+          <div class="metric-card"><div class="metric-label"><i class="ti ti-arrow-up-circle"></i> Despesas</div><div class="metric-value" style="font-size:22px" id="m-despesas">R$ 0</div><div style="font-size:10px;color:var(--text3);opacity:.7;margin-top:2px">pago no mês · caixa</div></div>
+          <div class="metric-card"><div class="metric-label"><i class="ti ti-trending-up"></i> Investimentos</div><div class="metric-value" style="font-size:22px" id="m-investimentos">R$ 0</div><div style="font-size:10px;color:var(--text3);opacity:.7;margin-top:2px">aportado no mês · caixa</div></div>
         </div>
         <div style="display:none"><span id="m-patrimonio"></span><span id="d-patrimonio"></span></div>
 
-        <!-- Fatura do cartão + Gastos por forma de pagamento -->
-        <div class="row-2" style="margin-bottom:16px">
-          <div class="card" id="card-fatura-cartao" style="display:none">
-            <div class="card-header"><div><div class="card-title">Faturas de cartão</div><div class="card-sub">Ciclo do mês selecionado · clique para ver os lançamentos</div></div></div>
-            <div id="lista-faturas-cartao" style="display:flex;flex-direction:column;gap:12px"></div>
+        <!-- EXECUÇÃO DO MÊS: trilha = lançado (competência) · preenchimento = liquidado (caixa) -->
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header"><div><div class="card-title">Execução do mês</div><div class="card-sub">Quanto do que está lançado já foi liquidado</div></div></div>
+          <div id="execucao-mes" style="display:flex;flex-direction:column;gap:14px"></div>
+        </div>
+
+        <!-- CATEGORIAS com seletor de tipo no título -->
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header">
+            <div>
+              <div class="card-title" style="display:flex;align-items:center;gap:6px">
+                <select id="cat-tipo-seletor" onchange="renderDashboard()" style="font-size:14px;font-weight:600;color:var(--dark);border:0.5px solid var(--border-light);border-radius:8px;padding:3px 8px;background:var(--card);font-family:inherit">
+                  <option value="despesa">Gastos</option>
+                  <option value="receita">Receitas</option>
+                  <option value="investimento">Investimentos</option>
+                </select>
+                <span>por categoria</span>
+              </div>
+              <div class="card-sub" id="dash-tag-sub">vs orçamento</div>
+            </div>
           </div>
+          <div id="lista-categorias" class="category-list"></div>
+        </div>
+
+        <!-- Formas de pagamento + Fatura (abaixo do resumo por categoria) -->
+        <div class="row-2" id="row-formas-fatura" style="margin-bottom:16px">
           <div class="card">
             <div class="card-header"><div><div class="card-title">Gastos por forma de pagamento</div><div class="card-sub">Neste mês · clique para ver os lançamentos</div></div></div>
             <div id="cards-formas-pagamento" class="fp-grid"></div>
           </div>
-        </div>
-
-        <div class="row-2" style="margin-bottom:16px">
-          <div class="card">
-            <div class="card-header">
-              <div><div class="card-title">Gastos por categoria</div><div class="card-sub" id="dash-tag-sub">vs orçamento</div></div>
-            </div>
-            <div id="lista-categorias" class="category-list"></div>
-          </div>
-          <div class="card">
-            <div class="card-header"><div><div class="card-title">Previsto × Realizado</div><div class="card-sub">Sobra prevista vs. já realizada — últimos 6 meses</div></div></div>
-            <div id="grafico-previsto-realizado" style="width:100%;overflow-x:auto"></div>
+          <div class="card" id="card-fatura-cartao" style="display:none">
+            <div class="card-header"><div><div class="card-title">Faturas de cartão</div><div class="card-sub">Compras do mês selecionado · clique para ver os lançamentos</div></div></div>
+            <div id="lista-faturas-cartao" style="display:flex;flex-direction:column;gap:12px"></div>
           </div>
         </div>
 
