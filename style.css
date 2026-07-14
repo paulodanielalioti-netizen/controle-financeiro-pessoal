@@ -532,7 +532,7 @@ select {
 select:focus { border-color: var(--dark); }
 select:disabled { opacity: 0.55; cursor: not-allowed; }
 
-/* ===== ITEM 2: refinamentos estéticos do dashboard ===== */
+/* ===== ITEM 2: refinamentos estéticos do dashboard ===== *
 /* Mini-cards internos sem borda — fundo suave separa sem ruído de linhas */
 .fp-card { border: none !important; background: var(--bg) !important; }
 .sit-cell .sit-label, .fp-card > div:first-child { text-transform: uppercase; letter-spacing: 0.4px; font-size: 10px; }
