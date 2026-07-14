@@ -3,7 +3,14 @@
 // ========================
 let DB = {
   lancamentos: [],
-  patrimonio: [],
+  patrimonio: [], // legado: totais únicos por mês (preservado no gráfico)
+  patrimonioCategorias: [
+    { id: 'pat_rf',      nome: 'Renda Fixa',     cor: '#EF9F27' },
+    { id: 'pat_rv',      nome: 'Renda Variável', cor: '#378ADD' },
+    { id: 'pat_reserva', nome: 'Reserva',        cor: '#7F77DD' },
+    { id: 'pat_bens',    nome: 'Bens',           cor: '#1D9E75' },
+  ],
+  patrimonioValores: [], // { mes:'YYYY-MM', catId, valor } — um por categoria por mês
   categorias: [
     // ── RECEITAS ──
     { id: 'rec_trabalho', natureza: 'receita',     nome: 'Trabalho Fixo',             cor: '#16a34a', codigo: '1.1', subcats: ['Salário Mar&Rio','Comissões'] },
@@ -55,7 +62,7 @@ let DB = {
 };
 
 let chartPatrimonio = null;
-let chartPatrimonioFull = null;
+
 let chartCategorias = null;
 // ===== Datas no fuso LOCAL (nunca usar toISOString para "hoje": em UTC-3, depois das 21h o UTC já virou o dia seguinte) =====
 function pad2(n) { return String(n).padStart(2, '0'); }
@@ -285,6 +292,20 @@ function carregarDB() {
         DB.migradoV8 = true;
         salvarDB();
       }
+      // Migração v9 — Patrimônio por categoria (Modelo C). Legado de totais é preservado.
+      if (!parsed.migradoV9) {
+        if (!DB.patrimonioCategorias || !DB.patrimonioCategorias.length) {
+          DB.patrimonioCategorias = [
+            { id: 'pat_rf',      nome: 'Renda Fixa',     cor: '#EF9F27' },
+            { id: 'pat_rv',      nome: 'Renda Variável', cor: '#378ADD' },
+            { id: 'pat_reserva', nome: 'Reserva',        cor: '#7F77DD' },
+            { id: 'pat_bens',    nome: 'Bens',           cor: '#1D9E75' },
+          ];
+        }
+        if (!DB.patrimonioValores) DB.patrimonioValores = [];
+        DB.migradoV9 = true;
+        salvarDB();
+      }
     } catch(e) { console.error('Erro ao carregar DB', e); }
   }
 }
@@ -478,35 +499,68 @@ function renderDashboard() {
   renderFaturaCartao();
   renderGastosPorFormaPagamento(lancsFiltrados);
 
-  // Categorias por tipo (seletor no título: Gastos / Receitas / Investimentos)
+  // Categorias por tipo — ROSCA (donut) com legenda ranqueada
   const catTipo = document.getElementById('cat-tipo-seletor')?.value || 'despesa';
   const porCat = {};
   lancsFiltrados.filter(l => l.tipo === catTipo).forEach(l => {
     porCat[l.categoria] = (porCat[l.categoria] || 0) + l.valor;
   });
-  const maxVal = Math.max(...Object.values(porCat), 1);
   const listaCats = document.getElementById('lista-categorias');
-  listaCats.innerHTML = '';
-  Object.entries(porCat).sort((a, b) => b[1] - a[1]).slice(0, 8).forEach(([cat, val]) => {
-    // Orçamento só existe para gastos
-    const orc = catTipo === 'despesa' ? (DB.orcamentos[cat] || 0) : 0;
-    const pct = orc > 0 ? Math.min(Math.round((val / orc) * 100), 100) : Math.round((val / maxVal) * 100);
-    const corBarra = orc > 0 && val > orc ? '#ef4444' : getCor(cat);
-    const orcLabel = orc > 0 && !dashTag ? '<span style="font-size:10px;color:var(--text3);margin-left:4px">/ ' + fmt(orc) + '</span>' : '';
-    listaCats.innerHTML += '<div class="cat-item">' +
-      '<span class="cat-label">' + esc(getNomeCat(cat)) + '</span>' +
-      '<div class="cat-bar-bg"><div class="cat-bar" style="width:' + pct + '%;background:' + corBarra + '"></div></div>' +
-      '<span class="cat-value">' + fmt(val) + orcLabel + '</span>' +
-      '</div>';
-  });
-  if (!Object.keys(porCat).length) {
+  const entradasCat = Object.entries(porCat).sort((a, b) => b[1] - a[1]);
+  const totalCat = entradasCat.reduce((a, b) => a + b[1], 0);
+
+  if (!entradasCat.length) {
     const nomesTipo = { despesa: 'despesa', receita: 'receita', investimento: 'aporte' };
     listaCats.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:16px 0;text-align:center">Nenhum(a) ' + nomesTipo[catTipo] + (dashTag ? ' com a tag "' + dashTag + '"' : '') + ' em ' + mesAtual + '</div>';
+  } else {
+    // Top 7 + agregado "Outras" (o total do centro é SEMPRE a soma completa)
+    let fatias = entradasCat.slice(0, 7).map(([cat, val]) => ({ id: cat, nome: getNomeCat(cat), val, cor: getCor(cat) }));
+    if (entradasCat.length > 7) {
+      const resto = entradasCat.slice(7).reduce((a, b) => a + b[1], 0);
+      fatias.push({ id: '__outras__', nome: 'Outras categorias', val: resto, cor: '#94a3b8' });
+    }
+
+    // Rosca: círculos com dasharray sobre circunferência ~100 (r = 15.9155)
+    let offset = 0;
+    let circulos = '';
+    fatias.forEach(f => {
+      const pct = (f.val / totalCat) * 100;
+      circulos += '<circle cx="21" cy="21" r="15.9155" fill="none" stroke="' + f.cor + '" stroke-width="6" stroke-dasharray="' + pct.toFixed(3) + ' ' + (100 - pct).toFixed(3) + '" stroke-dashoffset="' + (-offset).toFixed(3) + '" style="cursor:pointer" onclick="abrirDetalheCategoriaDash(\'' + f.id + '\',\'' + catTipo + '\')"><title>' + esc(f.nome) + ': ' + fmt(f.val) + '</title></circle>';
+      offset += pct;
+    });
+
+    const legenda = fatias.map(f => {
+      const pct = Math.round((f.val / totalCat) * 100);
+      // Selo de orçamento: só para gastos, só quando estourou
+      const orc = (catTipo === 'despesa' && f.id !== '__outras__') ? (DB.orcamentos[f.id] || 0) : 0;
+      const selo = orc > 0 && f.val >= orc
+        ? '<span style="color:#dc2626;font-size:10px;background:#fee2e2;padding:1px 7px;border-radius:8px;white-space:nowrap">' + Math.round((f.val / orc) * 100) + '% do orçamento</span>'
+        : '';
+      return '<div style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer" onclick="abrirDetalheCategoriaDash(\'' + f.id + '\',\'' + catTipo + '\')">' +
+        '<span style="width:9px;height:9px;border-radius:2px;background:' + f.cor + ';flex-shrink:0"></span>' +
+        '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(f.nome) + '</span>' +
+        selo +
+        '<span style="font-weight:600;white-space:nowrap">' + fmt(f.val) + '</span>' +
+        '<span style="color:var(--text3);font-size:11px;width:32px;text-align:right">' + pct + '%</span>' +
+      '</div>';
+    }).join('');
+
+    listaCats.innerHTML =
+      '<div style="display:flex;gap:24px;align-items:center;flex-wrap:wrap">' +
+        '<div style="position:relative;width:180px;height:180px;flex-shrink:0">' +
+          '<svg viewBox="0 0 42 42" style="width:180px;height:180px;transform:rotate(-90deg)">' + circulos + '</svg>' +
+          '<div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none">' +
+            '<span style="font-size:11px;color:var(--text3)">Total</span>' +
+            '<span style="font-size:17px;font-weight:600">' + fmt(totalCat) + '</span>' +
+          '</div>' +
+        '</div>' +
+        '<div style="flex:1;min-width:230px;display:flex;flex-direction:column;gap:7px">' + legenda + '</div>' +
+      '</div>';
   }
   // Subtítulo do card acompanha o tipo
   const subCat = document.getElementById('dash-tag-sub');
   if (subCat) {
-    const subPorTipo = { despesa: 'vs orçamento', receita: 'maiores receitas do mês', investimento: 'aportes do mês' };
+    const subPorTipo = { despesa: 'vs orçamento · clique numa fatia para ver os lançamentos', receita: 'maiores receitas do mês', investimento: 'aportes do mês' };
     subCat.textContent = dashTag ? 'Tag: ' + dashTag : subPorTipo[catTipo];
   }
 
@@ -613,6 +667,35 @@ function renderGraficoMensal() {
 }
 
 
+
+// Drill-down da rosca: lançamentos da categoria (ou das "Outras") no mês, respeitando a tag
+function abrirDetalheCategoriaDash(catId, tipo) {
+  const doMes = filtraPorDashTag(getMes(mesAtual)).filter(l => l.tipo === tipo);
+  let itens, titulo;
+  if (catId === '__outras__') {
+    const somas = {};
+    doMes.forEach(l => { somas[l.categoria] = (somas[l.categoria] || 0) + l.valor; });
+    const top7 = Object.entries(somas).sort((a, b) => b[1] - a[1]).slice(0, 7).map(e => e[0]);
+    itens = doMes.filter(l => !top7.includes(l.categoria));
+    titulo = 'Outras categorias';
+  } else {
+    itens = doMes.filter(l => l.categoria === catId);
+    titulo = getNomeCat(catId);
+  }
+  itens = itens.sort((a, b) => b.valor - a.valor);
+  const total = itens.reduce((a, b) => a + b.valor, 0);
+  document.getElementById('detalhe-mes-titulo').textContent = titulo + ' · ' + mesAtual;
+  document.getElementById('detalhe-mes-total').textContent = fmt(total);
+  const corpo = document.getElementById('detalhe-mes-corpo');
+  corpo.innerHTML = itens.length ? itens.map(l =>
+    '<div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:0.5px solid var(--border-light2)">' +
+      '<span style="font-size:11px;color:var(--text3);min-width:50px">' + formatarData(l.data) + '</span>' +
+      '<span style="flex:1;font-size:12px">' + esc(l.descricao) + ((l.situacao||'pago')==='aberto' ? ' <span style="font-size:10px;color:#a16207">(em aberto)</span>' : '') + '</span>' +
+      '<span style="font-size:12px;font-weight:500">' + fmt(l.valor) + '</span>' +
+    '</div>').join('')
+    : '<div style="text-align:center;color:var(--text3);padding:20px">Nenhum lançamento</div>';
+  document.getElementById('modal-detalhe-mes').style.display = 'flex';
+}
 
 function abrirDetalheMes(mes, tipo) {
   const isPago = l => (l.situacao || 'pago') === 'pago';
@@ -753,7 +836,8 @@ function mudarFiltroSituacaoManual() {
 
 function renderChartPatrimonio() {
   if (typeof Chart === 'undefined') { console.error('Chart.js não carregou (CDN indisponível) — gráfico de patrimônio ignorado'); return; }
-  const pats = [...DB.patrimonio].sort((a, b) => a.mes.localeCompare(b.mes)).slice(-6);
+  // Totais unificados: meses novos (soma por categoria) + meses legados (total único)
+  const pats = getMesesComPatrimonio().slice(-6).map(m => ({ mes: m, valor: getTotalPatrimonioMes(m) || 0 }));
   if (chartPatrimonio) chartPatrimonio.destroy();
   const ctx = document.getElementById('chartPatrimonio');
   if (!ctx || !pats.length) return;
@@ -2634,35 +2718,285 @@ function abrirDetalheFormaPagamento(formaId) {
 // ========================
 // PATRIMÔNIO
 // ========================
+// ============================================================
+// PATRIMÔNIO — Modelo C: categorias, meta, aportes × valorização
+// ============================================================
+
+// Total de um mês: soma das categorias se houver registro novo; senão, cai no legado
+function getTotalPatrimonioMes(mes) {
+  const doMes = DB.patrimonioValores.filter(v => v.mes === mes);
+  if (doMes.length) return doMes.reduce((a, b) => a + b.valor, 0);
+  const legado = DB.patrimonio.find(p => p.mes === mes);
+  return legado ? legado.valor : null;
+}
+
+function getMesesComPatrimonio() {
+  const s = new Set();
+  DB.patrimonioValores.forEach(v => s.add(v.mes));
+  DB.patrimonio.forEach(p => s.add(p.mes));
+  return [...s].sort();
+}
+
+// Último valor conhecido de uma categoria (para pré-preencher e para os cards)
+function getUltimoValorCategoria(catId, ateMes) {
+  const regs = DB.patrimonioValores
+    .filter(v => v.catId === catId && (!ateMes || v.mes <= ateMes))
+    .sort((a, b) => a.mes.localeCompare(b.mes));
+  return regs.length ? regs[regs.length - 1] : null;
+}
+
 function renderPatrimonio() {
-  const pats = [...DB.patrimonio].sort((a,b) => a.mes.localeCompare(b.mes));
-  const atual = pats.length ? pats[pats.length-1].valor : 0;
-  const ant = pats.length > 1 ? pats[pats.length-2].valor : 0;
-  document.getElementById('pat-atual').textContent = fmt(atual);
-  document.getElementById('pat-mes').textContent = (atual-ant>=0?'+':'-') + ' ' + fmt(Math.abs(atual-ant));
+  const mesRef = mesLocalISO();
+  const meta = (DB.config && DB.config.meta) || 1000000;
 
-  if (typeof Chart === 'undefined') { console.error('Chart.js não carregou (CDN indisponível) — gráfico de patrimônio ignorado'); return; }
-  if (chartPatrimonioFull) chartPatrimonioFull.destroy();
-  const ctx = document.getElementById('chartPatrimonioFull');
-  if (!ctx || !pats.length) return;
-  chartPatrimonioFull = new Chart(ctx, {
-    type:'line',
-    data:{ labels:pats.map(p=>{const[y,m]=p.mes.split('-');return new Date(y,m-1).toLocaleDateString('pt-BR',{month:'short',year:'2-digit'});}), datasets:[{data:pats.map(p=>p.valor),borderColor:'#4f9cf9',backgroundColor:'rgba(79,156,249,0.08)',borderWidth:2,pointBackgroundColor:'#4f9cf9',pointRadius:4,fill:true,tension:0.4}] },
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>fmt(ctx.raw)}}},scales:{x:{grid:{color:'rgba(0,0,0,0.04)'},ticks:{color:'#94a3b8',font:{size:11}}},y:{grid:{color:'rgba(0,0,0,0.04)'},ticks:{color:'#94a3b8',font:{size:11},callback:v=>'R$'+(v/1000).toFixed(0)+'k'}}}}
+  // ---- Aviso de valores pendentes do mês corrente ----
+  const temMesAtual = DB.patrimonioValores.some(v => v.mes === mesRef);
+  const aviso = document.getElementById('pat-aviso-pendente');
+  if (aviso) {
+    aviso.style.display = temMesAtual ? 'none' : 'flex';
+    const [y, m] = mesRef.split('-').map(Number);
+    const nome = new Date(y, m - 1).toLocaleDateString('pt-BR', { month: 'long' });
+    const el = document.getElementById('pat-aviso-mes');
+    if (el) el.textContent = nome;
+  }
+
+  // ---- Placar da meta ----
+  const meses = getMesesComPatrimonio();
+  const ultimoMes = meses.length ? meses[meses.length - 1] : null;
+  const total = ultimoMes ? (getTotalPatrimonioMes(ultimoMes) || 0) : 0;
+  const pct = meta > 0 ? (total / meta) * 100 : 0;
+  document.getElementById('pat-meta-label').textContent = fmt(meta);
+  document.getElementById('pat-total').innerHTML = fmt(total) + ' <span id="pat-pct" style="font-size:13px;color:var(--text3);font-weight:400">· ' + pct.toFixed(1).replace('.', ',') + '% do caminho</span>';
+  document.getElementById('pat-meta-fill').style.width = Math.min(pct, 100) + '%';
+
+  // Projeção honesta: ritmo médio de crescimento dos últimos até-6 intervalos
+  const projEl = document.getElementById('pat-projecao');
+  if (projEl) {
+    const ultimos = meses.slice(-7); // até 7 pontos = 6 intervalos
+    if (ultimos.length >= 2) {
+      const vIni = getTotalPatrimonioMes(ultimos[0]) || 0;
+      const vFim = getTotalPatrimonioMes(ultimos[ultimos.length - 1]) || 0;
+      // Distância real em meses entre o primeiro e o último ponto (buracos contam)
+      const [y1, m1] = ultimos[0].split('-').map(Number);
+      const [y2, m2] = ultimos[ultimos.length - 1].split('-').map(Number);
+      const nMeses = (y2 - y1) * 12 + (m2 - m1);
+      const ritmo = nMeses > 0 ? (vFim - vIni) / nMeses : 0;
+      if (ritmo > 0 && total < meta) {
+        const mesesRestantes = Math.ceil((meta - total) / ritmo);
+        const anos = Math.floor(mesesRestantes / 12), sobra = mesesRestantes % 12;
+        projEl.innerHTML = 'no ritmo dos últimos meses (' + fmt(ritmo) + '/mês)<br><b style="color:var(--text)">projeção: ~' + (anos > 0 ? anos + ' ano(s)' + (sobra ? ' e ' + sobra + ' mês(es)' : '') : sobra + ' mês(es)') + '</b>';
+      } else if (total >= meta) {
+        projEl.innerHTML = '<b style="color:#16a34a">Meta atingida! 🎉</b>';
+      } else {
+        projEl.textContent = 'ritmo atual não permite projeção — registre mais meses';
+      }
+    } else {
+      projEl.textContent = 'registre pelo menos 2 meses para ver a projeção';
+    }
+  }
+
+  // ---- Cards por categoria ----
+  const cards = document.getElementById('pat-cards');
+  if (cards) {
+    cards.innerHTML = DB.patrimonioCategorias.map(cat => {
+      const atual = getUltimoValorCategoria(cat.id);
+      const valorAtual = atual ? atual.valor : 0;
+      let deltaHtml = '<span style="font-size:12px;color:var(--text3)">sem registro</span>';
+      if (atual) {
+        const anterior = DB.patrimonioValores
+          .filter(v => v.catId === cat.id && v.mes < atual.mes)
+          .sort((a, b) => b.mes.localeCompare(a.mes))[0];
+        if (anterior) {
+          const d = valorAtual - anterior.valor;
+          if (Math.abs(d) < 0.005) deltaHtml = '<span style="font-size:12px;color:var(--text3)">estável</span>';
+          else deltaHtml = '<span style="font-size:12px;color:' + (d > 0 ? '#16a34a' : '#dc2626') + '">' + (d > 0 ? '+ ' : '− ') + fmt(Math.abs(d)) + ' vs registro anterior</span>';
+        } else {
+          deltaHtml = '<span style="font-size:12px;color:var(--text3)">primeiro registro</span>';
+        }
+      }
+      return '<div class="fp-card" style="padding:12px;border-radius:10px;position:relative">' +
+        '<div style="font-size:10px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;letter-spacing:.4px;display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:' + cat.cor + ';display:inline-block"></span>' + esc(cat.nome) +
+        ' <span style="margin-left:auto;display:flex;gap:2px">' +
+          '<i class="ti ti-pencil" style="cursor:pointer;font-size:12px" title="Renomear" onclick="renomearCategoriaPatrimonio(\'' + cat.id + '\')"></i>' +
+          '<i class="ti ti-trash" style="cursor:pointer;font-size:12px" title="Excluir" onclick="excluirCategoriaPatrimonio(\'' + cat.id + '\')"></i>' +
+        '</span></div>' +
+        '<div style="font-size:17px;font-weight:600">' + fmt(valorAtual) + '</div>' +
+        deltaHtml +
+      '</div>';
+    }).join('');
+  }
+
+  // ---- Composição (barra empilhada %) ----
+  const compEl = document.getElementById('pat-composicao');
+  if (compEl) {
+    const valores = DB.patrimonioCategorias
+      .map(cat => ({ cat, valor: (getUltimoValorCategoria(cat.id) || { valor: 0 }).valor }))
+      .filter(x => x.valor > 0);
+    const soma = valores.reduce((a, b) => a + b.valor, 0);
+    if (!soma) {
+      compEl.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:12px 0;text-align:center">Atualize os valores para ver a composição</div>';
+    } else {
+      valores.sort((a, b) => b.valor - a.valor);
+      compEl.innerHTML =
+        '<div style="display:flex;height:14px;border-radius:7px;overflow:hidden">' +
+          valores.map(x => '<div style="width:' + ((x.valor / soma) * 100) + '%;background:' + x.cat.cor + '" title="' + esc(x.cat.nome) + '"></div>').join('') +
+        '</div>' +
+        '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;font-size:11px;color:var(--text2)">' +
+          valores.map(x => '<span><span style="display:inline-block;width:8px;height:8px;background:' + x.cat.cor + ';border-radius:2px;margin-right:4px"></span>' + esc(x.cat.nome) + ' ' + Math.round((x.valor / soma) * 100) + '%</span>').join('') +
+        '</div>';
+    }
+  }
+
+  // ---- Aportes × Valorização (últimos 3 meses com dados) ----
+  const avEl = document.getElementById('pat-aportes-valorizacao');
+  if (avEl) {
+    const comDados = meses.filter(m => getTotalPatrimonioMes(m) !== null);
+    if (comDados.length >= 2) {
+      const fimIdx = comDados.length - 1;
+      const iniIdx = Math.max(0, fimIdx - 3);
+      const mesIni = comDados[iniIdx], mesFim = comDados[fimIdx];
+      const crescimento = (getTotalPatrimonioMes(mesFim) || 0) - (getTotalPatrimonioMes(mesIni) || 0);
+      // Aportes do sistema no intervalo (exclusivo do mês inicial, inclusivo do final)
+      const aportes = DB.lancamentos
+        .filter(l => l.tipo === 'investimento' && (l.situacao || 'pago') === 'pago' && l.data.slice(0, 7) > mesIni && l.data.slice(0, 7) <= mesFim)
+        .reduce((a, b) => a + b.valor, 0);
+      const valorizacao = crescimento - aportes;
+      const sub = document.getElementById('pat-av-sub');
+      if (sub) sub.textContent = 'De ' + mesIni + ' a ' + mesFim;
+      avEl.innerHTML = '<table style="width:100%;font-size:12px;border-collapse:collapse">' +
+        '<tr style="color:var(--text2)"><td style="padding:3px 0">Aportes (dos seus lançamentos)</td><td style="text-align:right;color:var(--text);font-weight:600">' + fmt(aportes) + '</td></tr>' +
+        '<tr style="color:var(--text2)"><td style="padding:3px 0">Crescimento do patrimônio</td><td style="text-align:right;color:var(--text);font-weight:600">' + (crescimento < 0 ? '− ' : '') + fmt(Math.abs(crescimento)) + '</td></tr>' +
+        '<tr style="color:var(--text2);border-top:0.5px solid var(--border-light)"><td style="padding:5px 0 0">= Valorização (dinheiro trabalhando)</td><td style="text-align:right;padding-top:5px;font-weight:600;color:' + (valorizacao >= 0 ? '#16a34a' : '#dc2626') + '">' + (valorizacao >= 0 ? '+ ' : '− ') + fmt(Math.abs(valorizacao)) + '</td></tr>' +
+      '</table>';
+    } else {
+      avEl.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:12px 0;text-align:center">Registre pelo menos 2 meses para ver aportes × valorização</div>';
+    }
+  }
+
+  renderEvolucaoPatrimonio();
+}
+
+// Gráfico de evolução: barras empilhadas por categoria; meses só-legado em barra única cinza
+function renderEvolucaoPatrimonio() {
+  const el = document.getElementById('pat-evolucao');
+  if (!el) return;
+  const meses = getMesesComPatrimonio().slice(-12);
+  if (!meses.length) {
+    el.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:20px 0;text-align:center">Nenhum registro ainda — atualize os valores do mês para começar</div>';
+    return;
+  }
+  const totais = meses.map(m => getTotalPatrimonioMes(m) || 0);
+  const maxVal = Math.max(...totais, 1);
+  const rotulo = v => v >= 1000 ? 'R$ ' + (v / 1000).toFixed(1).replace('.', ',') + 'k' : 'R$ ' + Math.round(v);
+
+  const W = 1000, H = 300, topo = 26, chao = H - 44;
+  const alturaMax = chao - topo;
+  const slot = W / meses.length;
+  const larguraBarra = Math.min(slot * 0.5, 68);
+
+  let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" style="width:100%;height:300px;font-family:inherit;display:block">';
+  [0.25, 0.5, 0.75].forEach(f => {
+    const gy = chao - alturaMax * f;
+    svg += '<line x1="0" y1="' + gy + '" x2="' + W + '" y2="' + gy + '" stroke="var(--border-light)" stroke-width="1" stroke-dasharray="3,5" opacity="0.5"></line>';
   });
+  svg += '<line x1="0" y1="' + chao + '" x2="' + W + '" y2="' + chao + '" stroke="var(--border-light)" stroke-width="1.5"></line>';
+
+  meses.forEach((m, i) => {
+    const cx = i * slot + slot / 2;
+    const x = cx - larguraBarra / 2;
+    const [ano, mesN] = m.split('-');
+    const nomeMs = new Date(ano, mesN - 1).toLocaleDateString('pt-BR', { month: 'short' });
+    const doMes = DB.patrimonioValores.filter(v => v.mes === m && v.valor > 0);
+    const total = totais[i];
+    svg += '<g>';
+    if (doMes.length) {
+      // Empilhado por categoria
+      let yAtual = chao;
+      doMes.sort((a, b) => b.valor - a.valor).forEach(v => {
+        const cat = DB.patrimonioCategorias.find(cc => cc.id === v.catId);
+        const hSeg = (v.valor / maxVal) * alturaMax;
+        yAtual -= hSeg;
+        svg += '<rect x="' + x + '" y="' + yAtual + '" width="' + larguraBarra + '" height="' + hSeg + '" fill="' + (cat ? cat.cor : '#94a3b8') + '"><title>' + esc(cat ? cat.nome : 'Categoria removida') + ': ' + fmt(v.valor) + '</title></rect>';
+      });
+      svg += '<rect x="' + x + '" y="' + (chao - (total / maxVal) * alturaMax) + '" width="' + larguraBarra + '" height="' + ((total / maxVal) * alturaMax) + '" rx="3" fill="transparent" stroke="none"></rect>';
+    } else if (total > 0) {
+      // Mês legado (total único)
+      const hT = (total / maxVal) * alturaMax;
+      svg += '<rect x="' + x + '" y="' + (chao - hT) + '" width="' + larguraBarra + '" height="' + hT + '" rx="3" fill="#94a3b8" opacity="0.6"><title>Total (registro antigo): ' + fmt(total) + '</title></rect>';
+    }
+    if (total > 0) svg += '<text x="' + cx + '" y="' + (chao - (total / maxVal) * alturaMax - 8) + '" text-anchor="middle" font-size="12" fill="var(--text2)">' + rotulo(total) + '</text>';
+    svg += '<text x="' + cx + '" y="' + (chao + 24) + '" text-anchor="middle" font-size="12" fill="var(--text3)">' + nomeMs + '/' + ano.slice(2) + '</text>';
+    svg += '</g>';
+  });
+  svg += '</svg>';
+  el.innerHTML = svg;
 }
 
-function salvarPatrimonio(e) {
-  e.preventDefault();
-  const mes = document.getElementById('pat-data').value;
-  const valor = parseFloat(document.getElementById('pat-valor').value);
-  if (!mes || isNaN(valor)) return;
-  const idx = DB.patrimonio.findIndex(p => p.mes === mes);
-  if (idx >= 0) DB.patrimonio[idx].valor = valor;
-  else DB.patrimonio.push({ mes, valor });
-  salvarDB(); renderPatrimonio(); renderDashboard();
-  toast('Patrimônio registrado!');
+// ---- Atualização mensal (a "foto", agora com nome civil) ----
+function abrirAtualizarValores() {
+  const mesRef = mesLocalISO();
+  const [y, m] = mesRef.split('-').map(Number);
+  const nome = new Date(y, m - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  document.getElementById('pat-modal-sub').innerHTML = 'Valores de <b>' + nome + '</b> · pré-preenchidos com o último registro, ajuste só o que mudou';
+  const campos = document.getElementById('pat-modal-campos');
+  campos.innerHTML = DB.patrimonioCategorias.map(cat => {
+    const doMes = DB.patrimonioValores.find(v => v.mes === mesRef && v.catId === cat.id);
+    const ultimo = doMes || getUltimoValorCategoria(cat.id);
+    const valor = ultimo ? ultimo.valor : '';
+    return '<div class="form-group"><label style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:' + cat.cor + ';display:inline-block"></span>' + esc(cat.nome) + ' (R$)</label>' +
+      '<input type="number" step="0.01" min="0" data-catid="' + cat.id + '" class="pat-valor-input" value="' + valor + '" placeholder="0,00"></div>';
+  }).join('');
+  document.getElementById('modal-pat-valores').style.display = 'flex';
 }
+
+function salvarValoresPatrimonio(e) {
+  e.preventDefault();
+  const mesRef = mesLocalISO();
+  document.querySelectorAll('.pat-valor-input').forEach(inp => {
+    const catId = inp.dataset.catid;
+    const valor = parseFloat(inp.value);
+    if (isNaN(valor)) return; // campo vazio = não registra
+    const idx = DB.patrimonioValores.findIndex(v => v.mes === mesRef && v.catId === catId);
+    if (idx >= 0) DB.patrimonioValores[idx].valor = valor;
+    else DB.patrimonioValores.push({ mes: mesRef, catId, valor });
+  });
+  salvarDB();
+  fecharModal('modal-pat-valores');
+  renderPatrimonio();
+  try { renderChartPatrimonio(); } catch(ex) {}
+  toast('Valores de patrimônio atualizados!');
+}
+
+// ---- CRUD de categorias de patrimônio ----
+function adicionarCategoriaPatrimonio() {
+  const nome = prompt('Nome da nova categoria de patrimônio (ex: Cripto):');
+  if (!nome || !nome.trim()) return;
+  const cores = ['#D85A30', '#D4537E', '#639922', '#0F6E56', '#534AB7', '#BA7517'];
+  const cor = cores[DB.patrimonioCategorias.length % cores.length];
+  DB.patrimonioCategorias.push({ id: 'pat_' + Date.now().toString(36), nome: nome.trim(), cor });
+  salvarDB(); renderPatrimonio();
+  toast('Categoria criada — ela já aparece no próximo "Atualizar valores"');
+}
+
+function renomearCategoriaPatrimonio(id) {
+  const cat = DB.patrimonioCategorias.find(x => x.id === id);
+  if (!cat) return;
+  const nome = prompt('Novo nome:', cat.nome);
+  if (!nome || !nome.trim()) return;
+  cat.nome = nome.trim();
+  salvarDB(); renderPatrimonio();
+}
+
+function excluirCategoriaPatrimonio(id) {
+  const cat = DB.patrimonioCategorias.find(x => x.id === id);
+  if (!cat) return;
+  const regs = DB.patrimonioValores.filter(v => v.catId === id).length;
+  if (!confirm('Excluir "' + cat.nome + '"?' + (regs ? '\n\nOs ' + regs + ' registros históricos dela continuam contando nos meses antigos; ela só sai dos próximos formulários.' : ''))) return;
+  DB.patrimonioCategorias = DB.patrimonioCategorias.filter(x => x.id !== id);
+  salvarDB(); renderPatrimonio();
+  toast('Categoria excluída — histórico preservado');
+}
+
 
 // ========================
 // RESUMO COACH
