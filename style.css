@@ -515,3 +515,36 @@ body {
 .dre-resultado .dre-pos { color: #4ade80; }
 .dre-resultado .dre-neg { color: #f87171; }
 .tx-amount.inv { color: #2563eb; }
+
+
+/* ===== SELECTS UNIFICADOS (identidade do sistema em todos os dropdowns) ===== */
+select {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--card);
+  border: 0.5px solid var(--border-light);
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  outline: none;
+}
+select:focus { border-color: var(--dark); }
+select:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* ===== ITEM 2: refinamentos estéticos do dashboard ===== */
+/* Mini-cards internos sem borda — fundo suave separa sem ruído de linhas */
+.fp-card { border: none !important; background: var(--bg) !important; }
+.sit-cell .sit-label, .fp-card > div:first-child { text-transform: uppercase; letter-spacing: 0.4px; font-size: 10px; }
+/* Hierarquia tipográfica: título de card um degrau acima */
+.card-title { font-size: 15px; font-weight: 600; }
+/* Sem fatura configurada, formas de pagamento ocupa a largura toda (buraco nunca mais) */
+#row-formas-fatura.sem-fatura { grid-template-columns: 1fr; }
+
+/* ===== Execução do mês ===== */
+.exec-row { display: flex; flex-direction: column; gap: 5px; }
+.exec-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 12px; }
+.exec-nome { font-weight: 500; color: var(--text2); }
+.exec-info { color: var(--text3); }
+.exec-track { height: 10px; background: var(--border-light2, #e2e8f0); border-radius: 6px; overflow: hidden; }
+.exec-fill { height: 100%; border-radius: 6px; transition: width 0.4s ease; }
