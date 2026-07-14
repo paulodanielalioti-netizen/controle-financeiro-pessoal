@@ -318,22 +318,50 @@
           <span class="aviso-backup-texto" style="flex:1;font-size:13px;color:#713f12">—</span>
           <button class="btn" style="font-size:12px;padding:5px 12px;background:#a16207;border-color:#a16207;color:#fff" onclick="exportarDados()"><i class="ti ti-database-export"></i> Fazer backup agora</button>
         </div>
-        <div class="metrics" style="grid-template-columns:repeat(3,1fr)">
-          <div class="metric-card"><div class="metric-label">Patrimônio atual</div><div class="metric-value" id="pat-atual">R$ 0</div></div>
-          <div class="metric-card"><div class="metric-label">Evolução este mês</div><div class="metric-value" id="pat-mes">R$ 0</div></div>
-          <div class="metric-card"><div class="metric-label">Meta (30 anos)</div><div class="metric-value">R$ 1.000.000</div></div>
+
+
+        <!-- Aviso de valores pendentes do mês -->
+        <div id="pat-aviso-pendente" style="display:none;align-items:center;gap:10px;padding:10px 16px;background:#eff6ff;border:0.5px solid #bfdbfe;border-radius:10px;margin-bottom:14px">
+          <i class="ti ti-calendar-stats" style="color:#1d4ed8;font-size:18px"></i>
+          <span style="flex:1;font-size:13px;color:#1e3a8a">Valores de <b id="pat-aviso-mes">—</b> ainda não atualizados — leva 2 minutos.</span>
+          <button class="btn" style="font-size:12px;padding:5px 12px;background:#1d4ed8;border-color:#1d4ed8;color:#fff" onclick="abrirAtualizarValores()"><i class="ti ti-edit"></i> Atualizar valores do mês</button>
         </div>
-        <div class="card"><div class="card-title" style="margin-bottom:16px">Evolução patrimonial</div><div class="chart-wrap" style="height:280px"><canvas id="chartPatrimonioFull"></canvas></div></div>
-        <div class="card" style="margin-top:16px">
-          <div class="card-header"><div class="card-title">Registrar patrimônio</div></div>
-          <form class="form-manual" onsubmit="salvarPatrimonio(event)">
-            <div class="form-row">
-              <div class="form-group"><label>Mês de referência</label><input type="month" id="pat-data"></div>
-              <div class="form-group"><label>Valor total (R$)</label><input type="number" id="pat-valor" step="0.01" placeholder="0,00"></div>
-              <div class="form-group" style="justify-content:flex-end;display:flex;align-items:flex-end"><button type="submit" class="btn btn-accent">Salvar</button></div>
+
+        <!-- Placar da meta -->
+        <div class="card" style="margin-bottom:14px">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;flex-wrap:wrap;gap:8px">
+            <div>
+              <div style="font-size:12px;color:var(--text3)">Meta: <span id="pat-meta-label">R$ 1.000.000</span> até os 30</div>
+              <div style="font-size:26px;font-weight:600;margin-top:2px" id="pat-total">R$ 0 <span id="pat-pct" style="font-size:13px;color:var(--text3);font-weight:400"></span></div>
             </div>
-          </form>
+            <div style="text-align:right;font-size:12px;color:var(--text3)" id="pat-projecao">—</div>
+          </div>
+          <div style="height:10px;background:var(--bg);border-radius:6px;margin-top:10px;overflow:hidden">
+            <div id="pat-meta-fill" style="width:0%;height:100%;background:#1d4ed8;border-radius:6px;transition:width .4s ease"></div>
+          </div>
         </div>
+
+        <!-- Cards por categoria -->
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="font-size:13px;font-weight:600;color:var(--dark)">Categorias</div>
+          <button class="btn" style="font-size:12px;padding:4px 10px" onclick="adicionarCategoriaPatrimonio()"><i class="ti ti-plus"></i> Categoria</button>
+        </div>
+        <div id="pat-cards" class="fp-grid" style="margin-bottom:14px"></div>
+
+        <!-- Composição + Aportes × Valorização -->
+        <div class="row-2" style="margin-bottom:14px">
+          <div class="card">
+            <div class="card-header"><div><div class="card-title">Composição</div><div class="card-sub">Onde o patrimônio mora</div></div></div>
+            <div id="pat-composicao"></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><div><div class="card-title">Aportes × Valorização</div><div class="card-sub" id="pat-av-sub">Últimos 3 meses</div></div></div>
+            <div id="pat-aportes-valorizacao"></div>
+          </div>
+        </div>
+
+        <!-- Evolução -->
+        <div class="card"><div class="card-header"><div><div class="card-title">Evolução patrimonial</div><div class="card-sub">Empilhado por categoria · meses antigos em total único</div></div></div><div id="pat-evolucao" style="width:100%;overflow-x:auto"></div></div>
       </div>
 
       <!-- CONFIGURAÇÕES (hub único) -->
@@ -589,6 +617,21 @@
       <button class="btn btn-accent" onclick="salvarNovaTag()">Salvar</button>
       <button class="btn" onclick="fecharModal('modal-nova-tag')">Cancelar</button>
     </div>
+  </div>
+</div>
+
+<!-- MODAL ATUALIZAR VALORES DO MÊS (patrimônio) -->
+<div id="modal-pat-valores" class="modal-overlay" style="display:none" onclick="fecharModal('modal-pat-valores')">
+  <div class="modal-box" style="max-width:440px" onclick="event.stopPropagation()">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <div style="font-size:16px;font-weight:600">Atualizar valores do mês</div>
+      <button class="btn-icon" onclick="fecharModal('modal-pat-valores')"><i class="ti ti-x"></i></button>
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:14px" id="pat-modal-sub">Valores de <b>—</b> · pré-preenchidos com o último registro, ajuste só o que mudou</div>
+    <form class="form-manual" onsubmit="salvarValoresPatrimonio(event)">
+      <div id="pat-modal-campos" style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px"></div>
+      <button type="submit" class="btn btn-accent" style="width:100%">Salvar valores</button>
+    </form>
   </div>
 </div>
 
