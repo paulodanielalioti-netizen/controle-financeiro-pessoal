@@ -168,7 +168,7 @@
           <div id="mais-filtros" style="display:none;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 12px;background:var(--bg);border-radius:10px;margin-bottom:12px">
             <select id="filtro-status" onchange="renderLancamentos()"><option value="">Todos</option><option value="pendente">Pendentes</option><option value="validado">Validados</option><option value="interno">Internos</option></select>
             <select id="filtro-situacao" onchange="mudarFiltroSituacaoManual()"><option value="">Pagos e em aberto</option><option value="pago">Pagos</option><option value="aberto">Em aberto</option></select>
-            <select id="filtro-tipo" onchange="renderLancamentos()"><option value="">Todos os tipos</option><option value="receita">Receitas</option><option value="despesa">Despesas</option></select>
+            <select id="filtro-tipo" onchange="renderLancamentos()"><option value="">Todos os tipos</option><option value="receita">Receitas</option><option value="despesa">Despesas</option><option value="investimento">Investimentos</option><option value="interno">Internos</option></select>
             <select id="filtro-categoria" onchange="renderLancamentos()"><option value="">Todas as categorias</option></select>
             <input type="text" id="filtro-tag" placeholder="Tag..." style="padding:6px 10px;border-radius:8px;border:0.5px solid var(--border-light);font-size:13px;font-family:inherit;width:90px" oninput="renderLancamentos()">
             <span style="font-size:12px;color:var(--text3)">Período manual:</span>
@@ -194,7 +194,7 @@
               <div class="sit-label" style="color:#16a34a">Pagas / Recebidas</div>
               <div class="sit-val"><span class="sit-pagar" id="sit-l-pagas-p">R$ 0</span><span class="sit-receber" id="sit-l-pagas-r">R$ 0</span></div>
             </div>
-            <div class="sit-cell sit-cell-saldo" data-situacao="total" onclick="aplicarFiltroSituacaoRapida('total')" title="A receber − a pagar dos lançamentos em aberto">
+            <div class="sit-cell sit-cell-saldo" data-situacao="total" onclick="aplicarFiltroSituacaoRapida('total')" title="A receber − a pagar dos lançamentos em aberto · clique para limpar o filtro de situação">
               <div class="sit-label">Saldo em aberto</div>
               <div class="sit-val"><span id="sit-l-saldo" style="font-size:15px;font-weight:600">R$ 0</span></div>
             </div>
@@ -358,6 +358,12 @@
             <div class="card-header"><div><div class="card-title">Aportes × Valorização</div><div class="card-sub" id="pat-av-sub">Últimos 3 meses</div></div></div>
             <div id="pat-aportes-valorizacao"></div>
           </div>
+        </div>
+
+        <!-- Histórico (editar/apagar meses) -->
+        <div class="card" style="margin-bottom:14px">
+          <div class="card-header"><div><div class="card-title">Histórico de registros</div><div class="card-sub">Edite ou apague qualquer mês — registros antigos (total único) podem ser convertidos ou excluídos</div></div></div>
+          <div id="pat-historico" style="display:flex;flex-direction:column;gap:4px"></div>
         </div>
 
         <!-- Evolução -->
