@@ -41,8 +41,7 @@ let DB = {
   ignorados: [],
   previstos: [],
   formasPagamento: [
-    { id: 'credito',       nome: 'Cartão de Crédito', tipoCiclo: 'fatura',  fechamento: 1, vencimento: 10 },
-    { id: 'xp',            nome: 'XP',                tipoCiclo: 'simples' },
+    { id: 'xp',            nome: 'XP',                tipoCiclo: 'fatura', fechamento: 3, vencimento: 10 },
     { id: 'inter',         nome: 'Inter',             tipoCiclo: 'simples' },
     { id: 'cea',           nome: 'C&A',               tipoCiclo: 'simples' },
     { id: 'hipercard',     nome: 'Hipercard',         tipoCiclo: 'simples' },
@@ -266,6 +265,26 @@ function carregarDB() {
         salvarDB();
         console.log('Migração v7 — Formas de Pagamento como entidade');
       }
+      // Migração v8 — Cartão real: XP vira cartão com fatura (fecha dia 3, vence dia 10);
+      // "Cartão de Crédito" genérico é aposentado e seus lançamentos migram para o XP.
+      // Casa por NOME além do id, porque os ids em produção podem diferir do seed (fp_xp, fp_credito...).
+      if (!parsed.migradoV8) {
+        const achar = (nomes, ids) => DB.formasPagamento.find(f =>
+          ids.includes(f.id) || nomes.includes((f.nome || '').trim().toLowerCase()));
+        const fXP = achar(['xp', 'cartão xp', 'cartao xp'], ['xp', 'fp_xp']);
+        const fCred = achar(['cartão de crédito', 'cartao de credito'], ['credito', 'fp_credito']);
+        if (fXP) {
+          if (fXP.tipoCiclo !== 'fatura') { fXP.tipoCiclo = 'fatura'; fXP.fechamento = 3; fXP.vencimento = 10; }
+        }
+        if (fCred && fXP && fCred.id !== fXP.id) {
+          let migrados = 0;
+          DB.lancamentos.forEach(l => { if (l.formaPagamento === fCred.id) { l.formaPagamento = fXP.id; migrados++; } });
+          DB.formasPagamento = DB.formasPagamento.filter(f => f.id !== fCred.id);
+          console.log('Migração v8 — ' + migrados + ' lançamento(s) migrados de "Cartão de Crédito" para XP');
+        }
+        DB.migradoV8 = true;
+        salvarDB();
+      }
     } catch(e) { console.error('Erro ao carregar DB', e); }
   }
 }
@@ -456,22 +475,21 @@ function renderDashboard() {
   // lancsMes já vem filtrado pela tag (filtro global)
   const lancsFiltrados = lancsMes;
 
-  const subEl = document.getElementById('dash-tag-sub');
-  if (subEl) subEl.textContent = dashTag ? 'Tag: ' + dashTag : 'vs orçamento';
-
   renderFaturaCartao();
   renderGastosPorFormaPagamento(lancsFiltrados);
 
-  // Gastos por categoria
+  // Categorias por tipo (seletor no título: Gastos / Receitas / Investimentos)
+  const catTipo = document.getElementById('cat-tipo-seletor')?.value || 'despesa';
   const porCat = {};
-  lancsFiltrados.filter(l => l.tipo === 'despesa').forEach(l => {
+  lancsFiltrados.filter(l => l.tipo === catTipo).forEach(l => {
     porCat[l.categoria] = (porCat[l.categoria] || 0) + l.valor;
   });
   const maxVal = Math.max(...Object.values(porCat), 1);
   const listaCats = document.getElementById('lista-categorias');
   listaCats.innerHTML = '';
   Object.entries(porCat).sort((a, b) => b[1] - a[1]).slice(0, 8).forEach(([cat, val]) => {
-    const orc = DB.orcamentos[cat] || 0;
+    // Orçamento só existe para gastos
+    const orc = catTipo === 'despesa' ? (DB.orcamentos[cat] || 0) : 0;
     const pct = orc > 0 ? Math.min(Math.round((val / orc) * 100), 100) : Math.round((val / maxVal) * 100);
     const corBarra = orc > 0 && val > orc ? '#ef4444' : getCor(cat);
     const orcLabel = orc > 0 && !dashTag ? '<span style="font-size:10px;color:var(--text3);margin-left:4px">/ ' + fmt(orc) + '</span>' : '';
@@ -482,10 +500,19 @@ function renderDashboard() {
       '</div>';
   });
   if (!Object.keys(porCat).length) {
-    listaCats.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:16px 0;text-align:center">Nenhuma despesa' + (dashTag ? ' com a tag "' + dashTag + '"' : '') + ' em ' + mesAtual + '</div>';
+    const nomesTipo = { despesa: 'despesa', receita: 'receita', investimento: 'aporte' };
+    listaCats.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:16px 0;text-align:center">Nenhum(a) ' + nomesTipo[catTipo] + (dashTag ? ' com a tag "' + dashTag + '"' : '') + ' em ' + mesAtual + '</div>';
+  }
+  // Subtítulo do card acompanha o tipo
+  const subCat = document.getElementById('dash-tag-sub');
+  if (subCat) {
+    const subPorTipo = { despesa: 'vs orçamento', receita: 'maiores receitas do mês', investimento: 'aportes do mês' };
+    subCat.textContent = dashTag ? 'Tag: ' + dashTag : subPorTipo[catTipo];
   }
 
-  try { renderGraficoPrevistoRealizado(); } catch(e) { console.error('previstoRealizado:', e); }
+  // ITEM 6: Execução do mês (trilha = lançado/competência · preenchimento = liquidado/caixa)
+  renderExecucaoMes(lancsFiltrados);
+
   try { renderChartPatrimonio(); } catch(e) { console.error('chartPatrimonio:', e); }
   try { renderGraficoMensal(); } catch(e) { console.error('grafico:', e); }
 }
@@ -543,105 +570,49 @@ function renderGraficoMensal() {
 
   const maxVal = Math.max(...dados.map(d => d.total), 1);
   const cor = tipo === 'receita' ? '#16a34a' : tipo === 'investimento' ? '#2563eb' : '#d97706';
-  const larguraBarra = 100 / dados.length;
-  const alturaMax = 220;
 
-  let svg = '<svg viewBox="0 0 ' + (dados.length * 80) + ' 280" style="width:100%;min-width:' + (dados.length * 60) + 'px;height:280px;font-family:inherit">';
+  // Rótulo padronizado: sempre com R$ ("R$ 1,9k" / "R$ 996")
+  const rotulo = v => v >= 1000
+    ? 'R$ ' + (v / 1000).toFixed(1).replace('.', ',') + 'k'
+    : 'R$ ' + Math.round(v);
+
+  // Geometria: barras distribuídas pela LARGURA TOTAL do card
+  const W = 1000, H = 300, topo = 26, chao = H - 44;
+  const alturaMax = chao - topo;
+  const slot = W / dados.length;                       // espaço de cada mês
+  const larguraBarra = Math.min(slot * 0.45, 64);      // barra esbelta, nunca gorda
+
+  let svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" style="width:100%;height:300px;font-family:inherit;display:block">';
+
+  // Linhas de grade horizontais sutis (¼, ½, ¾) + linha de base
+  [0.25, 0.5, 0.75].forEach(f => {
+    const gy = chao - alturaMax * f;
+    svg += '<line x1="0" y1="' + gy + '" x2="' + W + '" y2="' + gy + '" stroke="var(--border-light)" stroke-width="1" stroke-dasharray="3,5" opacity="0.5"></line>';
+  });
+  svg += '<line x1="0" y1="' + chao + '" x2="' + W + '" y2="' + chao + '" stroke="var(--border-light)" stroke-width="1.5"></line>';
+
   dados.forEach((d, i) => {
-    const altura = d.total > 0 ? (d.total / maxVal) * alturaMax : 0;
-    const x = i * 80 + 15;
-    const y = alturaMax - altura + 20;
+    const altura = d.total > 0 ? Math.max((d.total / maxVal) * alturaMax, 3) : 0;
+    const cx = i * slot + slot / 2;
+    const x = cx - larguraBarra / 2;
+    const y = chao - altura;
     const [ano, mesN] = d.mes.split('-');
     const nomeMs = new Date(ano, mesN - 1).toLocaleDateString('pt-BR', { month: 'short' });
+    const ehSelecionado = d.mes === mesAtual;
     svg += '<g style="cursor:pointer" onclick="abrirDetalheMes(\'' + d.mes + '\',\'' + tipo + '\')">';
-    svg += '<rect x="' + x + '" y="20" width="50" height="' + alturaMax + '" fill="transparent"></rect>'; // área clicável
-    svg += '<rect x="' + x + '" y="' + y + '" width="50" height="' + altura + '" rx="4" fill="' + cor + '" opacity="0.85"><title>' + fmt(d.total) + '</title></rect>';
-    if (d.total > 0) svg += '<text x="' + (x + 25) + '" y="' + (y - 6) + '" text-anchor="middle" font-size="11" fill="var(--text2)">' + (d.total >= 1000 ? 'R$ ' + (d.total/1000).toFixed(1) + 'k' : fmt(d.total).replace('R$ ', '')) + '</text>';
-    svg += '<text x="' + (x + 25) + '" y="' + (alturaMax + 40) + '" text-anchor="middle" font-size="11" fill="var(--text3)">' + nomeMs + '/' + ano.slice(2) + '</text>';
+    svg += '<rect x="' + (i * slot) + '" y="' + topo + '" width="' + slot + '" height="' + (chao - topo) + '" fill="transparent"></rect>';
+    if (d.total > 0) {
+      svg += '<rect x="' + x + '" y="' + y + '" width="' + larguraBarra + '" height="' + altura + '" rx="3" fill="' + cor + '" opacity="' + (ehSelecionado ? '1' : '0.5') + '"><title>' + fmt(d.total) + '</title></rect>';
+      svg += '<text x="' + cx + '" y="' + (y - 8) + '" text-anchor="middle" font-size="12" font-weight="' + (ehSelecionado ? '600' : '400') + '" fill="var(--text2)">' + rotulo(d.total) + '</text>';
+    }
+    svg += '<text x="' + cx + '" y="' + (chao + 24) + '" text-anchor="middle" font-size="12" font-weight="' + (ehSelecionado ? '600' : '400') + '" fill="' + (ehSelecionado ? 'var(--text)' : 'var(--text3)') + '">' + nomeMs + '/' + ano.slice(2) + '</text>';
     svg += '</g>';
   });
   svg += '</svg>';
   el.innerHTML = svg;
 }
 
-// Previsto × Realizado — barras agrupadas por mês (sobra prevista vs. sobra já realizada)
-function renderGraficoPrevistoRealizado() {
-  const el = document.getElementById('grafico-previsto-realizado');
-  if (!el) return;
-  const nMeses = 6;
-  const meses = [];
-  const base = new Date(mesAtual + '-01');
-  for (let i = nMeses - 1; i >= 0; i--) {
-    const d = new Date(base.getFullYear(), base.getMonth() - i, 1);
-    meses.push(mesLocalISO(d));
-  }
 
-  const dados = meses.map(m => {
-    const doMes = filtraPorDashTag(DB.lancamentos.filter(l => l.data.slice(0, 7) === m));
-    const recTotal = doMes.filter(l => l.tipo === 'receita').reduce((a, b) => a + b.valor, 0);
-    const despTotal = doMes.filter(l => l.tipo === 'despesa').reduce((a, b) => a + b.valor, 0);
-    const recPago = doMes.filter(l => l.tipo === 'receita' && (l.situacao||'pago')==='pago').reduce((a, b) => a + b.valor, 0);
-    const despPago = doMes.filter(l => l.tipo === 'despesa' && (l.situacao||'pago')==='pago').reduce((a, b) => a + b.valor, 0);
-    return { mes: m, previsto: recTotal - despTotal, realizado: recPago - despPago };
-  });
-
-  const maxVal = Math.max(...dados.map(d => Math.max(Math.abs(d.previsto), Math.abs(d.realizado))), 1);
-  const minVal = Math.min(...dados.map(d => Math.min(d.previsto, d.realizado)), 0);
-  const alturaMax = 180;
-  const zeroY = 20 + (maxVal / (maxVal - minVal)) * alturaMax;
-  const escala = (v) => (v / (maxVal - minVal)) * alturaMax;
-  const largGrupo = 90;
-
-  let svg = '<svg viewBox="0 0 ' + (dados.length * largGrupo) + ' 280" style="width:100%;min-width:' + (dados.length * 70) + 'px;height:280px;font-family:inherit">';
-  // linha zero
-  svg += '<line x1="0" y1="' + zeroY + '" x2="' + (dados.length * largGrupo) + '" y2="' + zeroY + '" stroke="var(--border-light)" stroke-width="1"></line>';
-  dados.forEach((d, i) => {
-    const xg = i * largGrupo + 10;
-    const [ano, mesN] = d.mes.split('-');
-    const nomeMs = new Date(ano, mesN - 1).toLocaleDateString('pt-BR', { month: 'short' });
-    svg += '<g style="cursor:pointer" onclick="abrirDetalhePrevistoRealizado(\'' + d.mes + '\')">';
-    svg += '<rect x="' + xg + '" y="10" width="70" height="250" fill="transparent"></rect>';
-    // Previsto (barra clara)
-    const hP = escala(Math.abs(d.previsto));
-    const yP = d.previsto >= 0 ? zeroY - hP : zeroY;
-    svg += '<rect x="' + xg + '" y="' + yP + '" width="28" height="' + hP + '" rx="3" fill="#93c5fd"><title>Previsto: ' + fmt(d.previsto) + '</title></rect>';
-    // Realizado (barra escura)
-    const hR = escala(Math.abs(d.realizado));
-    const yR = d.realizado >= 0 ? zeroY - hR : zeroY;
-    svg += '<rect x="' + (xg + 34) + '" y="' + yR + '" width="28" height="' + hR + '" rx="3" fill="#1d4ed8"><title>Realizado: ' + fmt(d.realizado) + '</title></rect>';
-    svg += '<text x="' + (xg + 31) + '" y="270" text-anchor="middle" font-size="11" fill="var(--text3)">' + nomeMs + '/' + ano.slice(2) + '</text>';
-    svg += '</g>';
-  });
-  svg += '</svg>';
-  svg += '<div style="display:flex;gap:16px;justify-content:center;margin-top:6px;font-size:11px;color:var(--text2)">' +
-    '<span><span style="display:inline-block;width:9px;height:9px;background:#93c5fd;border-radius:2px;margin-right:4px"></span>Previsto</span>' +
-    '<span><span style="display:inline-block;width:9px;height:9px;background:#1d4ed8;border-radius:2px;margin-right:4px"></span>Realizado</span>' +
-  '</div>';
-  el.innerHTML = svg;
-}
-
-function abrirDetalhePrevistoRealizado(mes) {
-  const doMes = filtraPorDashTag(DB.lancamentos.filter(l => l.data.slice(0, 7) === mes));
-  const recTotal = doMes.filter(l => l.tipo === 'receita').reduce((a, b) => a + b.valor, 0);
-  const despTotal = doMes.filter(l => l.tipo === 'despesa').reduce((a, b) => a + b.valor, 0);
-  const recPago = doMes.filter(l => l.tipo === 'receita' && (l.situacao||'pago')==='pago').reduce((a, b) => a + b.valor, 0);
-  const despPago = doMes.filter(l => l.tipo === 'despesa' && (l.situacao||'pago')==='pago').reduce((a, b) => a + b.valor, 0);
-  const previsto = recTotal - despTotal, realizado = recPago - despPago;
-  const [ano, mesN] = mes.split('-');
-  const nomeMs = new Date(ano, mesN - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-
-  document.getElementById('detalhe-mes-titulo').textContent = 'Previsto × Realizado · ' + nomeMs.charAt(0).toUpperCase() + nomeMs.slice(1);
-  document.getElementById('detalhe-mes-total').textContent = fmt(realizado);
-  const corpo = document.getElementById('detalhe-mes-corpo');
-  corpo.innerHTML =
-    '<div style="display:flex;flex-direction:column;gap:10px;padding:6px 0">' +
-      '<div style="display:flex;justify-content:space-between;padding:8px 10px;background:var(--bg);border-radius:8px"><span style="font-size:13px">Previsto (receitas − despesas, incluindo em aberto)</span><span style="font-weight:600">' + fmt(previsto) + '</span></div>' +
-      '<div style="display:flex;justify-content:space-between;padding:8px 10px;background:var(--bg);border-radius:8px"><span style="font-size:13px">Realizado (só o que já foi pago/recebido)</span><span style="font-weight:600">' + fmt(realizado) + '</span></div>' +
-      '<div style="display:flex;justify-content:space-between;padding:8px 10px;border-top:0.5px solid var(--border-light);font-size:12px;color:var(--text3)"><span>Receitas: ' + fmt(recTotal) + ' (pago: ' + fmt(recPago) + ')</span></div>' +
-      '<div style="display:flex;justify-content:space-between;padding:0 10px;font-size:12px;color:var(--text3)"><span>Despesas: ' + fmt(despTotal) + ' (pago: ' + fmt(despPago) + ')</span></div>' +
-    '</div>';
-  document.getElementById('modal-detalhe-mes').style.display = 'flex';
-}
 
 function abrirDetalheMes(mes, tipo) {
   const isPago = l => (l.situacao || 'pago') === 'pago';
@@ -2487,6 +2458,33 @@ function excluirFormaPagamento(id) {
 // ---- Ciclo de fatura (fechamento/vencimento) ----
 
 
+// ===== Execução do mês: quanto do lançado (competência) já virou caixa =====
+function renderExecucaoMes(lancsFiltrados) {
+  const wrap = document.getElementById('execucao-mes');
+  if (!wrap) return;
+  const linhas = [
+    { tipo: 'receita', nome: 'Receitas', cor: '#16a34a', verboTotal: 'lançado', verboPago: 'recebido' },
+    { tipo: 'despesa', nome: 'Despesas', cor: '#d97706', verboTotal: 'lançado', verboPago: 'pago' },
+  ];
+  let html = '';
+  let temAlgo = false;
+  linhas.forEach(({ tipo, nome, cor, verboPago }) => {
+    const doTipo = lancsFiltrados.filter(l => l.tipo === tipo);
+    const total = doTipo.reduce((a, b) => a + b.valor, 0);
+    const pago = doTipo.filter(l => (l.situacao || 'pago') === 'pago').reduce((a, b) => a + b.valor, 0);
+    if (total > 0) temAlgo = true;
+    const pct = total > 0 ? Math.round((pago / total) * 100) : 0;
+    html += '<div class="exec-row">' +
+      '<div class="exec-head">' +
+        '<span class="exec-nome">' + nome + '</span>' +
+        '<span class="exec-info">' + fmt(pago) + ' ' + verboPago + ' de ' + fmt(total) + ' · <b style="color:var(--text)">' + pct + '%</b></span>' +
+      '</div>' +
+      '<div class="exec-track"><div class="exec-fill" style="width:' + Math.min(pct, 100) + '%;background:' + cor + '"></div></div>' +
+    '</div>';
+  });
+  wrap.innerHTML = temAlgo ? html : '<div style="color:var(--text3);font-size:13px;padding:8px 0;text-align:center">Nenhum lançamento em ' + mesAtual + '</div>';
+}
+
 // Tag ativa no filtro do dashboard (filtro global — todos os widgets respondem)
 function getDashTag() {
   return (document.getElementById('dash-filtro-tag-select')?.value || '').trim().toLowerCase();
@@ -2496,15 +2494,15 @@ function filtraPorDashTag(arr, tagOverride) {
   return tag ? arr.filter(l => (l.tags || []).some(t => t.toLowerCase() === tag)) : arr;
 }
 
-// Ciclo "dono" de um mês-calendário específico (ex: "a fatura de Junho" = a que fecha em junho).
-// Usado pra fatura navegar junto com o mês selecionado no dashboard, em vez de sempre mostrar o ciclo real de hoje.
+// Ciclo de fatura ancorado no mês de INÍCIO (convenção do Paulo):
+// "fatura de julho" = compras de julho = (04/07 → 03/08) para fechamento dia 3.
+// O mês selecionado no dashboard é o mês em que o ciclo COMEÇA.
 function getCicloFaturaDoMes(mesStr, diaFechamento, diaVencimento) {
-  const [ano, mes] = mesStr.split('-').map(Number); // mes: 1-indexado
-  const dataFechamento = new Date(ano, mes - 1, diaFechamento);
-  let mesInicio = mes - 2, anoInicio = ano;
-  if (mesInicio < 0) { mesInicio = 11; anoInicio--; }
-  const dataInicio = new Date(anoInicio, mesInicio, diaFechamento + 1);
-  let anoVenc = ano, mesVenc = mes - 1;
+  const [ano, mes] = mesStr.split('-').map(Number); // mes: 1-indexado = mês de início
+  const dataInicio = new Date(ano, mes - 1, diaFechamento + 1);
+  const dataFechamento = new Date(ano, mes, diaFechamento); // fecha no mês seguinte
+  // Vencimento: no mês do fechamento se o dia vier depois; senão, no mês seguinte
+  let anoVenc = dataFechamento.getFullYear(), mesVenc = dataFechamento.getMonth();
   if (diaVencimento <= diaFechamento) { mesVenc += 1; if (mesVenc > 11) { mesVenc = 0; anoVenc++; } }
   const dataVencimento = new Date(anoVenc, mesVenc, diaVencimento);
   return { inicio: dataInicio, fechamento: dataFechamento, vencimento: dataVencimento };
@@ -2517,13 +2515,19 @@ function renderFaturaCartao() {
   const lista = document.getElementById('lista-faturas-cartao');
   if (!card || !lista) return;
   const formas = DB.formasPagamento.filter(f => f.tipoCiclo === 'fatura');
+  const row = document.getElementById('row-formas-fatura');
+  if (row) row.classList.toggle('sem-fatura', !formas.length);
   if (!formas.length) { card.style.display = 'none'; return; }
   card.style.display = 'block';
 
   const hoje = new Date();
-  const mesRealAtual = mesLocalISO(hoje);
 
   lista.innerHTML = formas.map(forma => {
+    // Na convenção de âncora-início: o ciclo "de hoje" é o do mês em que ele começou
+    // (dia > fechamento → começou neste mês; senão, ainda estamos no ciclo do mês anterior)
+    const mesRealAtual = hoje.getDate() > forma.fechamento
+      ? mesLocalISO(hoje)
+      : mesLocalISO(new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1));
     const ciclo = getCicloFaturaDoMes(mesAtual, forma.fechamento, forma.vencimento);
     const iniISO = dataParaISO(ciclo.inicio), fechISO = dataParaISO(ciclo.fechamento);
     const itens = filtraPorDashTag(DB.lancamentos.filter(l => l.formaPagamento === forma.id && l.tipo === 'despesa' && l.data >= iniISO && l.data <= fechISO));
